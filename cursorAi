@@ -31,8 +31,6 @@
     };
 
     const state = {
-        loaderVisible: false,
-        loaderStartAt: 0,
         lastClickedButton: null,
         currentCartTotal: 0,
         baselineCartQuantity: 0,
@@ -102,71 +100,121 @@
         }
     }
 
-    const loaderController = (() => {
-        let overlayElement = null;
-        let fallbackOverlay = null;
-
-        function resolveOverlay() {
-            if (overlayElement && document.body.contains(overlayElement)) {
-                return overlayElement;
-            }
-
-            overlayElement = document.querySelector('[data-loading-overlay]') || document.querySelector('.loadingOverlay');
-            if (overlayElement) {
-                overlayElement.setAttribute('data-loader-source', 'bigcommerce');
-            }
-            return overlayElement;
-        }
-
-        function ensureFallbackOverlay() {
-            if (fallbackOverlay && document.body.contains(fallbackOverlay)) {
-                return fallbackOverlay;
-            }
-
-            fallbackOverlay = document.createElement('div');
-            fallbackOverlay.className = 'loadingOverlay loadingOverlay--simplePLP';
-            fallbackOverlay.setAttribute('data-loader-source', 'simple-plp');
-            fallbackOverlay.setAttribute('aria-hidden', 'true');
-            fallbackOverlay.style.display = 'none';
-            fallbackOverlay.innerHTML = '<div class="loadingOverlay-icon"></div>';
-            document.body.appendChild(fallbackOverlay);
-            return fallbackOverlay;
-        }
+    const modalLoader = (() => {
+        let active = false;
+        let startAt = 0;
+        let mode = null; // 'modal' | 'existingOverlay' | 'fallbackOverlay'
+        let overlayRef = null;
+        let fallbackRef = null;
 
         function show() {
-            const overlay = resolveOverlay() || ensureFallbackOverlay();
-            state.loaderStartAt = Date.now();
-            overlay.style.display = 'block';
-            overlay.setAttribute('aria-hidden', 'false');
-            overlay.classList.add('is-visible');
-            state.loaderVisible = true;
+            const modal = document.querySelector(SELECTORS.modal);
+            if (!modal) {
+                showFallbackOverlay();
+                return;
+            }
+
+            const modalContent = modal.querySelector(SELECTORS.modalContent);
+            if (!modalContent) {
+                showFallbackOverlay();
+                return;
+            }
+
+            modalContent.innerHTML = getLoaderMarkup();
+            openModal(modal);
+            active = true;
+            startAt = Date.now();
+            mode = 'modal';
+            overlayRef = null;
+            fallbackRef = null;
         }
 
-        async function hide(forceMinimum = true) {
-            if (!state.loaderVisible) return;
+        function ensureVisible() {
+            if (!active) {
+                show();
+            }
+        }
 
-            const overlay = resolveOverlay() || ensureFallbackOverlay();
+        async function ensureMinimumDisplay(forceMinimum = true) {
+            if (!active) return;
+
             if (forceMinimum) {
-                const elapsed = Date.now() - state.loaderStartAt;
+                const elapsed = Date.now() - startAt;
                 const remaining = CONFIG.minLoaderDuration - elapsed;
                 if (remaining > 0) {
                     await delay(remaining);
                 }
             }
 
-            overlay.style.display = 'none';
-            overlay.setAttribute('aria-hidden', 'true');
-            overlay.classList.remove('is-visible');
-            state.loaderVisible = false;
-        }
-
-        function ensureVisible() {
-            if (!state.loaderVisible) {
-                show();
+            if (mode === 'existingOverlay' && overlayRef) {
+                overlayRef.style.display = 'none';
+                overlayRef.setAttribute('aria-hidden', 'true');
+                overlayRef.classList.remove('is-active', 'is-visible');
             }
+
+            if (mode === 'fallbackOverlay' && fallbackRef) {
+                fallbackRef.remove();
+                fallbackRef = null;
+            }
+
+            active = false;
+            mode = null;
+            overlayRef = null;
         }
 
-        return { show, hide, ensureVisible };
+        function getLoaderMarkup() {
+            return `
+                <div class="modal-body modal-body--loading" aria-live="polite" aria-busy="true">
+                    <div class="loadingOverlay is-active" data-loading-overlay>
+                        <div class="loadingOverlay-icon"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showFallbackOverlay() {
+            const overlay = document.querySelector('[data-loading-overlay]') || document.querySelector('.loadingOverlay');
+            if (overlay) {
+                overlay.style.display = 'block';
+                overlay.setAttribute('aria-hidden', 'false');
+                overlay.classList.add('is-active', 'is-visible');
+                active = true;
+                startAt = Date.now();
+                mode = 'existingOverlay';
+                overlayRef = overlay;
+                fallbackRef = null;
+                return;
+            }
+
+            const fallback = document.createElement('div');
+            fallback.className = 'loadingOverlay loadingOverlay--simplePLP is-active';
+            fallback.setAttribute('data-loading-overlay', '');
+            fallback.innerHTML = '<div class="loadingOverlay-icon"></div>';
+            Object.assign(fallback.style, {
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                background: 'rgba(255,255,255,0.8)',
+                zIndex: '1001',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            });
+            document.body.appendChild(fallback);
+            active = true;
+            startAt = Date.now();
+            mode = 'fallbackOverlay';
+            fallbackRef = fallback;
+            overlayRef = null;
+        }
+
+        return {
+            show,
+            ensureVisible,
+            ensureMinimumDisplay,
+        };
     })();
 
     async function handleAddToCartClick(event, button) {
@@ -198,7 +246,7 @@
         button.dataset.plpProcessing = 'true';
 
         try {
-            loaderController.show();
+            modalLoader.show();
 
             await addToCart(context.productId, context.quantity);
 
@@ -209,7 +257,7 @@
             const cartData = await waitForCartUpdate(expectedQuantity);
 
             if (cartData) {
-                await loaderController.hide(true);
+                await modalLoader.ensureMinimumDisplay(true);
                 updateCartCounter(cartData.quantity);
                 showCartModalWithData(cartData);
             } else {
@@ -217,7 +265,7 @@
             }
         } catch (error) {
             console.error('[simplePLPModal] add to cart failed', error);
-            await loaderController.hide(false);
+            await modalLoader.ensureMinimumDisplay(true);
             showAddToCartError();
         } finally {
             restoreButtonState(button, buttonSnapshot);
@@ -344,7 +392,7 @@
     }
 
     async function redirectToCartAfterSync(expectedQuantity) {
-        loaderController.ensureVisible();
+        modalLoader.ensureVisible();
         for (let attempt = 0; attempt < CONFIG.cartPollAttemptsOnRedirect; attempt += 1) {
             const cartData = await getCartDataFromAPI().catch(() => null);
             if (cartData && cartData.quantity >= expectedQuantity) {
@@ -352,6 +400,7 @@
             }
             await delay(CONFIG.cartPollInterval);
         }
+        await modalLoader.ensureMinimumDisplay(true);
         window.location.href = '/cart.php';
     }
 
