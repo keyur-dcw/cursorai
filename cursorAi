@@ -36,6 +36,7 @@
         currentCartTotal: 0,
         baselineCartQuantity: 0,
         pendingPricingUpdate: Promise.resolve(),
+        modalDismissed: false,
     };
 
     waitForDOMReady(init);
@@ -252,6 +253,7 @@
         button.dataset.plpProcessing = 'true';
 
         try {
+            state.modalDismissed = false;
             modalLoader.show();
 
             await addToCart(context.productId, context.quantity);
@@ -289,13 +291,15 @@
                 updateCartCounter(cartData.quantity);
                 showCartModalWithData(cartData);
             } else {
-                showBasicSuccessModal();
-                cartDataPromise.then((data) => {
-                    if (data && data.quantity >= 0) {
-                        updateCartCounter(data.quantity);
-                        showCartModalWithData(data);
-                    }
-                });
+                if (!state.modalDismissed) {
+                    showBasicSuccessModal();
+                    cartDataPromise.then((data) => {
+                        if (!state.modalDismissed && data && data.quantity >= 0) {
+                            updateCartCounter(data.quantity);
+                            showCartModalWithData(data);
+                        }
+                    });
+                }
             }
         } catch (error) {
             console.error('[simplePLPModal] add to cart failed', error);
@@ -469,6 +473,8 @@
     }
 
     function showBasicSuccessModal() {
+        if (state.modalDismissed) return;
+
         const modal = document.querySelector(SELECTORS.modal);
         if (!modal) return;
 
@@ -511,6 +517,8 @@
     }
 
     function showCartModalWithData(cartData) {
+        if (state.modalDismissed) return;
+
         const modal = document.querySelector(SELECTORS.modal);
         if (!modal) return;
 
@@ -560,6 +568,8 @@
     }
 
     function showAddToCartError() {
+        if (state.modalDismissed) return;
+
         const modal = document.querySelector(SELECTORS.modal);
         if (!modal) return;
 
@@ -595,10 +605,14 @@
             console.warn('[simplePLPModal] Pending pricing update failed before view cart redirect', error);
         }
 
-        await redirectToCartAfterSync(expectedQuantity);
+        if (!state.modalDismissed) {
+            await redirectToCartAfterSync(expectedQuantity);
+        }
     }
 
     function openModal(modal) {
+        if (state.modalDismissed) return;
+
         ensureModalBackdrop();
         modal.style.setProperty('display', 'block', 'important');
         modal.style.setProperty('opacity', '1', 'important');
@@ -628,6 +642,10 @@
     function closeModal() {
         const modal = document.querySelector(SELECTORS.modal);
         if (!modal) return;
+
+        state.modalDismissed = true;
+
+        modalLoader.ensureMinimumDisplay(false).catch(() => {});
 
         modal.style.setProperty('display', 'none', 'important');
         modal.style.setProperty('opacity', '0', 'important');
