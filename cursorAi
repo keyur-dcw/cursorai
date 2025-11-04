@@ -37,6 +37,7 @@
         baselineCartQuantity: 0,
         pendingPricingUpdate: Promise.resolve(),
         modalDismissed: false,
+        lastAddedQuantity: 1,
     };
 
     waitForDOMReady(init);
@@ -247,6 +248,7 @@
 
         state.lastClickedButton = button;
         state.baselineCartQuantity = state.currentCartTotal;
+        state.lastAddedQuantity = context.quantity;
         const expectedQuantity = state.baselineCartQuantity + context.quantity;
 
         const buttonSnapshot = setButtonLoadingState(button);
@@ -485,9 +487,12 @@
 
         removeModalClose(modal);
 
+        const addedQuantity = state.lastAddedQuantity || 1;
+        const headerText = getAddedItemsHeader(addedQuantity);
+
         modalContent.innerHTML = `
             <div class="modal-header">
-                <h1 class="modal-header-title">Product added to your cart</h1>
+                <h1 class="modal-header-title">${headerText}</h1>
             </div>
             <div class="modal-body">
                 <div class="previewCart">
@@ -528,12 +533,13 @@
         const productInfo = getLastAddedProductInfo();
 
         const quantityText = cartData.quantity === 1 ? 'item' : 'items';
+        const headerText = getAddedItemsHeader(state.lastAddedQuantity || cartData.quantity || 1);
 
         removeModalClose(modal);
 
         modalContent.innerHTML = `
             <div class="modal-header">
-                <h1 class="modal-header-title">Product added to your cart</h1>
+                <h1 class="modal-header-title">${headerText}</h1>
             </div>
             <div class="modal-body">
                 <div class="previewCart">
@@ -594,6 +600,14 @@
         openModal(modal);
     }
 
+    function getAddedItemsHeader(addedQuantity) {
+        const quantity = Math.max(1, parseInt(addedQuantity, 10) || 1);
+        if (quantity === 1) {
+            return "Ok, 1 item was added to your cart. What's next?";
+        }
+        return `Ok, ${quantity} items were added to your cart. What's next?`;
+    }
+
     async function handleViewCartAction() {
         const expectedQuantity = state.currentCartTotal || state.baselineCartQuantity || 0;
 
@@ -633,8 +647,9 @@
             backdrop = document.createElement('div');
             backdrop.className = 'modal-backdrop simple-plp';
             backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,0.5);z-index:999;';
-            backdrop.addEventListener('click', closeModal, { once: false });
             document.body.appendChild(backdrop);
+        } else {
+            backdrop.removeEventListener('click', closeModal);
         }
         backdrop.style.display = 'block';
     }
