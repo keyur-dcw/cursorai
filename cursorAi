@@ -13,6 +13,7 @@
         cartPollAttemptsOnRedirect: 10,
         n8nWaitBeforeCart: 2000,
         fallbackImage: 'https://via.placeholder.com/400x300?text=Product+Image',
+        maxLoaderDuration: 2000,
     };
 
     const SELECTORS = {
@@ -260,21 +261,41 @@
             const pricingPromise = Promise.resolve(
                 checkB2BAndUpdateCart(context.productId, context.quantity, button)
             );
-            state.pendingPricingUpdate = pricingPromise.catch((error) => {
-                console.warn('[simplePLPModal] Pricing update error', error);
-                return null;
-            });
-            await state.pendingPricingUpdate;
-            state.pendingPricingUpdate = Promise.resolve();
 
-            const cartData = await waitForCartUpdate(expectedQuantity);
+            state.pendingPricingUpdate = pricingPromise
+                .catch((error) => {
+                    console.warn('[simplePLPModal] Pricing update error', error);
+                    return null;
+                })
+                .finally(() => {
+                    state.pendingPricingUpdate = Promise.resolve();
+                });
+
+            const cartDataPromise = waitForCartUpdate(expectedQuantity).catch(() => null);
+            const loaderResult = await Promise.race([
+                cartDataPromise.then((data) => ({ type: 'data', data })),
+                delay(CONFIG.maxLoaderDuration).then(() => ({ type: 'timeout' })),
+            ]);
+
+            let cartData = null;
+            const timedOut = loaderResult.type === 'timeout' || !loaderResult.data;
+            if (!timedOut) {
+                cartData = loaderResult.data;
+            }
+
+            await modalLoader.ensureMinimumDisplay(true);
 
             if (cartData) {
-                await modalLoader.ensureMinimumDisplay(true);
                 updateCartCounter(cartData.quantity);
                 showCartModalWithData(cartData);
             } else {
-                await redirectToCartAfterSync(expectedQuantity);
+                showBasicSuccessModal();
+                cartDataPromise.then((data) => {
+                    if (data && data.quantity >= 0) {
+                        updateCartCounter(data.quantity);
+                        showCartModalWithData(data);
+                    }
+                });
             }
         } catch (error) {
             console.error('[simplePLPModal] add to cart failed', error);
@@ -447,6 +468,48 @@
         };
     }
 
+    function showBasicSuccessModal() {
+        const modal = document.querySelector(SELECTORS.modal);
+        if (!modal) return;
+
+        const modalContent = modal.querySelector(SELECTORS.modalContent);
+        if (!modalContent) return;
+
+        const productInfo = getLastAddedProductInfo();
+
+        removeModalClose(modal);
+
+        modalContent.innerHTML = `
+            <div class="modal-header">
+                <h1 class="modal-header-title">Product added to your cart</h1>
+            </div>
+            <div class="modal-body">
+                <div class="previewCart">
+                    <div class="productView">
+                        <figure class="productView-image">
+                            <div class="productView-img-container">
+                                <img src="${escapeHtml(productInfo.image)}" alt="${escapeHtml(productInfo.name)}" title="${escapeHtml(productInfo.name)}">
+                            </div>
+                        </figure>
+                        <div class="productView-details">
+                            <h2 class="productView-title">${escapeHtml(productInfo.name)}</h2>
+                            ${productInfo.sku ? `<div class="productView-brand">${escapeHtml(productInfo.sku)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="previewCartCheckout">
+                        <p class="previewCartCheckout-status">
+                            ✅ The product has been added to your cart.
+                        </p>
+                        <a href="#" class="button button--primary js-plp-modal-continue">Continue Shopping</a>
+                        <a href="/cart.php" class="button js-plp-modal-view-cart">View Cart</a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        openModal(modal);
+    }
+
     function showCartModalWithData(cartData) {
         const modal = document.querySelector(SELECTORS.modal);
         if (!modal) return;
@@ -457,6 +520,8 @@
         const productInfo = getLastAddedProductInfo();
 
         const quantityText = cartData.quantity === 1 ? 'item' : 'items';
+
+        removeModalClose(modal);
 
         modalContent.innerHTML = `
             <div class="modal-header">
@@ -501,6 +566,8 @@
         const modalContent = modal.querySelector(SELECTORS.modalContent);
         if (!modalContent) return;
 
+        removeModalClose(modal);
+
         modalContent.innerHTML = `
             <div class="modal-header">
                 <h1 class="modal-header-title">Unable to add to cart</h1>
@@ -543,6 +610,7 @@
         modal.style.setProperty('z-index', '1000', 'important');
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
+        removeModalClose(modal);
     }
 
     function ensureModalBackdrop() {
@@ -571,6 +639,12 @@
         if (backdrop) {
             backdrop.style.display = 'none';
         }
+    }
+
+    function removeModalClose(modal) {
+        if (!modal) return;
+        const closeElements = modal.querySelectorAll(SELECTORS.modalClose);
+        closeElements.forEach((element) => element.remove());
     }
 
     function initializeCartTotalTracking() {
