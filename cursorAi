@@ -7,7 +7,7 @@
     'use strict';
 
     const CONFIG = {
-        minLoaderDuration: 1000,
+        minLoaderDuration: 500,
         cartPollAttempts: 6,
         cartPollInterval: 600,
         cartPollAttemptsOnRedirect: 10,
@@ -34,6 +34,7 @@
         lastClickedButton: null,
         currentCartTotal: 0,
         baselineCartQuantity: 0,
+        pendingPricingUpdate: Promise.resolve(),
     };
 
     waitForDOMReady(init);
@@ -88,7 +89,10 @@
         const viewCartButton = target.closest(SELECTORS.modalViewCart);
         if (viewCartButton) {
             event.preventDefault();
-            handleViewCartAction();
+            handleViewCartAction().catch((error) => {
+                console.error('[simplePLPModal] View cart handler error', error);
+                window.location.href = '/cart.php';
+            });
         }
     }
 
@@ -164,8 +168,8 @@
 
         function getLoaderMarkup() {
             return `
-                <div class="modal-body modal-body--loading" aria-live="polite" aria-busy="true">
-                    <div class="loadingOverlay is-active" data-loading-overlay>
+                <div class="modal-body modal-body--loading" aria-live="polite" aria-busy="true" style="display:flex;align-items:center;justify-content:center;min-height:180px;">
+                    <div class="loadingOverlay is-active" data-loading-overlay data-loader-source="simple-plp" style="position:static;display:flex;align-items:center;justify-content:center;">
                         <div class="loadingOverlay-icon"></div>
                     </div>
                 </div>
@@ -189,6 +193,7 @@
             const fallback = document.createElement('div');
             fallback.className = 'loadingOverlay loadingOverlay--simplePLP is-active';
             fallback.setAttribute('data-loading-overlay', '');
+            fallback.setAttribute('data-loader-source', 'simple-plp');
             fallback.innerHTML = '<div class="loadingOverlay-icon"></div>';
             Object.assign(fallback.style, {
                 position: 'fixed',
@@ -252,7 +257,15 @@
 
             incrementCartCounter(context.quantity);
 
-            await checkB2BAndUpdateCart(context.productId, context.quantity, button);
+            const pricingPromise = Promise.resolve(
+                checkB2BAndUpdateCart(context.productId, context.quantity, button)
+            );
+            state.pendingPricingUpdate = pricingPromise.catch((error) => {
+                console.warn('[simplePLPModal] Pricing update error', error);
+                return null;
+            });
+            await state.pendingPricingUpdate;
+            state.pendingPricingUpdate = Promise.resolve();
 
             const cartData = await waitForCartUpdate(expectedQuantity);
 
@@ -504,9 +517,18 @@
         openModal(modal);
     }
 
-    function handleViewCartAction() {
+    async function handleViewCartAction() {
         const expectedQuantity = state.currentCartTotal || state.baselineCartQuantity || 0;
-        redirectToCartAfterSync(expectedQuantity);
+
+        modalLoader.show();
+
+        try {
+            await state.pendingPricingUpdate;
+        } catch (error) {
+            console.warn('[simplePLPModal] Pending pricing update failed before view cart redirect', error);
+        }
+
+        await redirectToCartAfterSync(expectedQuantity);
     }
 
     function openModal(modal) {
