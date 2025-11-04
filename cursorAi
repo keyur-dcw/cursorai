@@ -488,7 +488,8 @@
         removeModalClose(modal);
 
         const addedQuantity = state.lastAddedQuantity || 1;
-        const headerText = getAddedItemsHeader(addedQuantity);
+        const totalQuantity = state.currentCartTotal || addedQuantity;
+        const headerText = getAddedItemsHeader(addedQuantity, totalQuantity);
 
         modalContent.innerHTML = `
             <div class="modal-header">
@@ -510,6 +511,9 @@
                     <div class="previewCartCheckout">
                         <p class="previewCartCheckout-status">
                             ✅ The product has been added to your cart.
+                        </p>
+                        <p class="previewCartCheckout-total">
+                            ${renderCartTotalLine(totalQuantity)}
                         </p>
                         <a href="#" class="button button--primary js-plp-modal-continue">Continue Shopping</a>
                         <a href="/cart.php" class="button js-plp-modal-view-cart">View Cart</a>
@@ -533,7 +537,7 @@
         const productInfo = getLastAddedProductInfo();
 
         const quantityText = cartData.quantity === 1 ? 'item' : 'items';
-        const headerText = getAddedItemsHeader(state.lastAddedQuantity || cartData.quantity || 1);
+        const headerText = getAddedItemsHeader(state.lastAddedQuantity || cartData.quantity || 1, cartData.quantity);
 
         removeModalClose(modal);
 
@@ -561,7 +565,7 @@
                             <strong class="previewCartCheckout-price">${escapeHtml(cartData.total)}</strong>
                         </div>
                         <p data-cart-quantity="${cartData.quantity}">
-                            Your cart contains ${cartData.quantity} ${quantityText}
+                            ${renderCartTotalLine(cartData.quantity)}
                         </p>
                         <a href="#" class="button button--primary js-plp-modal-continue">Continue Shopping</a>
                         <a href="/cart.php" class="button js-plp-modal-view-cart">View or edit your cart</a>
@@ -600,12 +604,25 @@
         openModal(modal);
     }
 
-    function getAddedItemsHeader(addedQuantity) {
-        const quantity = Math.max(1, parseInt(addedQuantity, 10) || 1);
-        if (quantity === 1) {
-            return "Ok, 1 item was added to your cart. What's next?";
+    function getAddedItemsHeader(addedQuantity, totalQuantity) {
+        const added = Math.max(1, parseInt(addedQuantity, 10) || 1);
+        const total = Math.max(0, parseInt(totalQuantity, 10) || 0);
+
+        const addedLabel = added === 1 ? 'item' : 'items';
+        const addedVerb = added === 1 ? 'was' : 'were';
+
+        if (total > 0) {
+            const totalLabel = total === 1 ? 'item' : 'items';
+            return `Ok, ${added} ${addedLabel} ${addedVerb} added to your cart. Your cart contains ${total} ${totalLabel}.`;
         }
-        return `Ok, ${quantity} items were added to your cart. What's next?`;
+
+        return `Ok, ${added} ${addedLabel} ${addedVerb} added to your cart. What's next?`;
+    }
+
+    function renderCartTotalLine(totalQuantity) {
+        const total = Math.max(0, parseInt(totalQuantity, 10) || 0);
+        const label = total === 1 ? 'item' : 'items';
+        return `Your cart contains ${total} ${label}`;
     }
 
     async function handleViewCartAction() {
