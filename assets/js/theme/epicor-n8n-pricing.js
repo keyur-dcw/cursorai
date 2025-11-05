@@ -1978,7 +1978,7 @@
             const modalPriceContentEls = modal.querySelectorAll('.price-content');
 
             modalPriceLoadingEls.forEach(el => (el.style.display = 'block'));
-            modalPriceContentEls.forEach(el => (el.style.display = 'block'));
+            modalPriceContentEls.forEach(el => (el.style.display = 'none'));
 
             let actualProductId = epicorInstance?.getNumericProductId(modal) ||
                 epicorInstance?.getNumericProductId(quickviewBtn) || null;
@@ -1992,6 +1992,7 @@
 
             if (!actualProductId) {
                 modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                 return;
             }
 
@@ -2007,6 +2008,7 @@
                 const mainPriceSection = modal.querySelector('.price-section--withoutTax.price--withoutTax');
                 if (!mainPriceSection) {
                     modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                     quickviewRequestCache.delete(cacheKey);
                     return;
                 }
@@ -2015,6 +2017,7 @@
                 const priceEl = mainPriceSection.querySelector('.price');
                 if (!priceEl) {
                     modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                     quickviewRequestCache.delete(cacheKey);
                     return;
                 }
@@ -2023,7 +2026,6 @@
                     priceEl.setAttribute('data-original-price', priceEl.textContent.trim());
                 }
 
-                priceEl.textContent = 'Loading...';
                 priceEl.setAttribute('data-epicor-loading', 'true');
 
                 const sku = epicorInstance?.getSkuFromElement(modal) ||
@@ -2051,6 +2053,7 @@
                         .finally(() => {
                             priceEl.removeAttribute('data-epicor-loading');
                             modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                            modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                             setTimeout(() => quickviewRequestCache.delete(cacheKey), 500);
                         });
                 } else {
@@ -2059,6 +2062,7 @@
                         priceEl.textContent = originalPrice;
                         priceEl.removeAttribute('data-epicor-loading');
                         modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                        modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                         quickviewRequestCache.delete(cacheKey);
                     }, 1000);
                 }
