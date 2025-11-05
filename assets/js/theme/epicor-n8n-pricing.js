@@ -17,10 +17,10 @@
         BIGCOMMERCE_AUTH_TOKEN: 'pte9meprexvgw4td3ajlirxdsvk0e07',
         CACHE_TIMEOUT: 5 * 60 * 1000,
         BATCH_SIZE: 3,
-        VIEW_EDIT_CART_MAX_WAIT: 20000,
-        VIEW_EDIT_CART_MIN_SPIN: 10000,
-        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 2000,
-        VIEW_EDIT_CART_LOADER_FALLBACK: 15000,
+        VIEW_EDIT_CART_MAX_WAIT: 8000,
+        VIEW_EDIT_CART_MIN_SPIN: 8000,
+        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 250,
+        VIEW_EDIT_CART_LOADER_FALLBACK: 9000,
         N8N_STATUS_CHECK_INTERVAL: 100
     };
 
@@ -1221,14 +1221,92 @@
 
         // Show loader before updating prices
         showLoaderBeforeUpdate() {
-            const loadingOverlay = document.querySelector('.loadingOverlay');
-            if (loadingOverlay) {
-                loadingOverlay.style.display = 'block';
-            }
-
             if (this.loaderFallbackTimeout) {
                 clearTimeout(this.loaderFallbackTimeout);
             }
+
+            const overlayId = 'epicor-cart-loader';
+            let loadingOverlay = document.getElementById(overlayId);
+
+            if (!loadingOverlay) {
+                loadingOverlay = document.createElement('div');
+                loadingOverlay.id = overlayId;
+                loadingOverlay.className = 'loadingOverlay epicor-cart-loader';
+                Object.assign(loadingOverlay.style, {
+                    position: 'fixed',
+                    top: '0',
+                    left: '0',
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    zIndex: '999999',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    visibility: 'visible',
+                    opacity: '1',
+                    margin: '0',
+                    padding: '0'
+                });
+
+                const spinner = document.createElement('div');
+                spinner.className = 'epicor-loading-spinner';
+                Object.assign(spinner.style, {
+                    width: '60px',
+                    height: '60px',
+                    border: '5px solid #e0e0e0',
+                    borderTopColor: '#888888',
+                    borderRadius: '50%',
+                    animation: 'epicor-spin 1s linear infinite',
+                    display: 'block',
+                    margin: '0 auto'
+                });
+
+                loadingOverlay.appendChild(spinner);
+                document.body.appendChild(loadingOverlay);
+
+                if (!document.getElementById('epicor-spinner-styles')) {
+                    const style = document.createElement('style');
+                    style.id = 'epicor-spinner-styles';
+                    style.textContent = '@keyframes epicor-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+                    document.head.appendChild(style);
+                }
+            } else {
+                const spinners = loadingOverlay.querySelectorAll('.epicor-loading-spinner');
+                if (spinners.length === 0) {
+                    const spinner = document.createElement('div');
+                    spinner.className = 'epicor-loading-spinner';
+                    Object.assign(spinner.style, {
+                        width: '60px',
+                        height: '60px',
+                        border: '5px solid #e0e0e0',
+                        borderTopColor: '#888888',
+                        borderRadius: '50%',
+                        animation: 'epicor-spin 1s linear infinite',
+                        display: 'block',
+                        margin: '0 auto'
+                    });
+                    loadingOverlay.appendChild(spinner);
+                } else if (spinners.length > 1) {
+                    for (let i = 1; i < spinners.length; i++) {
+                        spinners[i].remove();
+                    }
+                }
+
+                Object.assign(loadingOverlay.style, {
+                    display: 'flex',
+                    visibility: 'visible',
+                    opacity: '1',
+                    zIndex: '999999'
+                });
+            }
+
+            const otherOverlays = document.querySelectorAll('.loadingOverlay');
+            otherOverlays.forEach(overlay => {
+                if (overlay !== loadingOverlay) {
+                    overlay.style.display = 'none';
+                }
+            });
 
             this.loaderFallbackTimeout = window.setTimeout(() => {
                 this.hideLoaderAfterUpdate();
@@ -1242,10 +1320,19 @@
                 this.loaderFallbackTimeout = null;
             }
 
-            const loadingOverlay = document.querySelector('.loadingOverlay');
-            if (loadingOverlay) {
-                loadingOverlay.style.display = 'none';
+            const customOverlay = document.getElementById('epicor-cart-loader');
+            if (customOverlay) {
+                customOverlay.style.display = 'none';
+                customOverlay.style.visibility = 'hidden';
+                customOverlay.style.opacity = '0';
             }
+
+            const otherOverlays = document.querySelectorAll('.loadingOverlay');
+            otherOverlays.forEach(overlay => {
+                if (overlay && overlay !== customOverlay) {
+                    overlay.style.display = 'none';
+                }
+            });
         }
 
         // Show cart prices after Epicor update
@@ -2192,9 +2279,18 @@
 
     function stopBigCommerceLoader() {
         try {
-            const loadingOverlay = document.querySelector('.loadingOverlay');
-            if (loadingOverlay) {
-                loadingOverlay.style.display = 'none';
+            const overlays = document.querySelectorAll('.loadingOverlay');
+            overlays.forEach(overlay => {
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            });
+
+            const customOverlay = document.getElementById('epicor-cart-loader');
+            if (customOverlay) {
+                customOverlay.style.display = 'none';
+                customOverlay.style.visibility = 'hidden';
+                customOverlay.style.opacity = '0';
             }
 
             const modalLoaders = document.querySelectorAll('.modal .loadingOverlay');
