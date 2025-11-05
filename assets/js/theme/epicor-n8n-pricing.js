@@ -1318,44 +1318,127 @@
             return 0;
         }
 
+        getCartItemElementById(itemId, fallbackIndex) {
+            const selectors = [];
+            const normalizedId = itemId != null ? String(itemId) : null;
+
+            if (normalizedId) {
+                selectors.push(
+                    `tr.cart-item[data-cart-itemid="${normalizedId}"]`,
+                    `tr[data-cart-itemid="${normalizedId}"]`,
+                    `[data-cart-itemid="${normalizedId}"]`,
+                    `[data-item-id="${normalizedId}"]`,
+                    `.cart-item[data-item-id="${normalizedId}"]`
+                );
+            }
+
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    return element;
+                }
+            }
+
+            if (typeof fallbackIndex === 'number') {
+                const fallbackList = document.querySelectorAll('tr.cart-item, .cart-item');
+                if (fallbackList && fallbackList[fallbackIndex]) {
+                    return fallbackList[fallbackIndex];
+                }
+            }
+
+            return null;
+        }
+
         // Update cart prices directly in DOM
         updateCartPricesInDOM(cartItems) {
 
             this.showLoaderBeforeUpdate();
 
             cartItems.forEach((item, index) => {
-                const epicorPrice = item.epicorPrice;
-                const itemTotal = epicorPrice * item.item.quantity;
+                const epicorPrice = Number(item.epicorPrice) || 0;
+                const quantity = Number(item.item?.quantity) || 1;
+                const itemTotal = epicorPrice * quantity;
+                const itemId = item.item?.id || item.item?.itemId || item.item?.item_id || null;
 
-                const priceSelectors = [
-                    `.cart-item-block.cart-item-info span.cart-item-value:not(strong)`,
-                    `.cart-item-block.cart-item-info .cart-item-value:not(strong)`,
-                    `span.cart-item-value:not(strong)`
-                ];
+                const cartItemElement = this.getCartItemElementById(itemId, index);
 
-                priceSelectors.forEach(selector => {
-                    const elements = document.querySelectorAll(selector);
-                    if (elements.length > 0) {
-                        elements[index]?.style.setProperty('opacity', '1');
-                        elements[index].textContent = `$${epicorPrice.toFixed(2)}`;
+                if (cartItemElement) {
+                    const unitPriceSelectors = [
+                        'span.cart-item-value:not(strong)',
+                        '.cart-item-value:not(strong)',
+                        '[data-cart-item-price]',
+                        '.cart-item-price',
+                        '[data-product-price]'
+                    ];
+
+                    let updatedUnitPrice = false;
+                    for (const selector of unitPriceSelectors) {
+                        const unitPriceEls = cartItemElement.querySelectorAll(selector);
+                        if (unitPriceEls && unitPriceEls.length) {
+                            unitPriceEls.forEach(el => {
+                                if (el.tagName === 'STRONG') {
+                                    return;
+                                }
+                                el.style.setProperty('opacity', '1');
+                                el.textContent = `$${epicorPrice.toFixed(2)}`;
+                                updatedUnitPrice = true;
+                            });
+                            if (updatedUnitPrice) {
+                                break;
+                            }
+                        }
                     }
-                });
 
-                const totalSelectors = [
-                    `.cart-item-block.cart-item-info strong.cart-item-value`,
-                    `strong.cart-item-value`
-                ];
+                    const totalSelectors = [
+                        '.cart-item-block.cart-item-info strong.cart-item-value',
+                        'strong.cart-item-value',
+                        '.cart-item-total',
+                        '.item-total'
+                    ];
 
-                totalSelectors.forEach(selector => {
-                    const elements = document.querySelectorAll(selector);
-                    if (elements.length > 0) {
-                        elements[index]?.style.setProperty('opacity', '1');
-                        elements[index].textContent = `$${itemTotal.toFixed(2)}`;
+                    let updatedTotal = false;
+                    for (const selector of totalSelectors) {
+                        const totalEl = cartItemElement.querySelector(selector);
+                        if (totalEl && !updatedTotal) {
+                            totalEl.style.setProperty('opacity', '1');
+                            totalEl.textContent = `$${itemTotal.toFixed(2)}`;
+                            updatedTotal = true;
+                        }
                     }
-                });
+
+                    if (!updatedUnitPrice || !updatedTotal) {
+                        const fallbackPriceEls = document.querySelectorAll('span.cart-item-value:not(strong), .cart-item-value:not(strong)');
+                        if (fallbackPriceEls && fallbackPriceEls[index]) {
+                            fallbackPriceEls[index].style.setProperty('opacity', '1');
+                            fallbackPriceEls[index].textContent = `$${epicorPrice.toFixed(2)}`;
+                        }
+
+                        const fallbackTotals = document.querySelectorAll('.cart-item-block.cart-item-info strong.cart-item-value, strong.cart-item-value');
+                        if (fallbackTotals && fallbackTotals[index]) {
+                            fallbackTotals[index].style.setProperty('opacity', '1');
+                            fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
+                        }
+                    }
+                } else {
+                    const fallbackPriceEls = document.querySelectorAll('span.cart-item-value:not(strong), .cart-item-value:not(strong)');
+                    if (fallbackPriceEls && fallbackPriceEls[index]) {
+                        fallbackPriceEls[index].style.setProperty('opacity', '1');
+                        fallbackPriceEls[index].textContent = `$${epicorPrice.toFixed(2)}`;
+                    }
+
+                    const fallbackTotals = document.querySelectorAll('.cart-item-block.cart-item-info strong.cart-item-value, strong.cart-item-value');
+                    if (fallbackTotals && fallbackTotals[index]) {
+                        fallbackTotals[index].style.setProperty('opacity', '1');
+                        fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
+                    }
+                }
             });
 
-            const totalPrice = cartItems.reduce((sum, item) => sum + (item.epicorPrice * item.item.quantity), 0);
+            const totalPrice = cartItems.reduce((sum, item) => {
+                const epicorPrice = Number(item.epicorPrice) || 0;
+                const quantity = Number(item.item?.quantity) || 1;
+                return sum + (epicorPrice * quantity);
+            }, 0);
 
             const subtotalSelectors = [
                 '[data-cart-totals-subtotal]',
@@ -1894,8 +1977,8 @@
             const modalPriceLoadingEls = modal.querySelectorAll('.price-loading');
             const modalPriceContentEls = modal.querySelectorAll('.price-content');
 
-            modalPriceContentEls.forEach(el => (el.style.display = 'none'));
             modalPriceLoadingEls.forEach(el => (el.style.display = 'block'));
+            modalPriceContentEls.forEach(el => (el.style.display = 'block'));
 
             let actualProductId = epicorInstance?.getNumericProductId(modal) ||
                 epicorInstance?.getNumericProductId(quickviewBtn) || null;
@@ -1909,14 +1992,12 @@
 
             if (!actualProductId) {
                 modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                 return;
             }
 
             const cacheKey = `quickview-${actualProductId}`;
             if (quickviewRequestCache.has(cacheKey)) {
                 modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                 return;
             }
 
@@ -1926,7 +2007,6 @@
                 const mainPriceSection = modal.querySelector('.price-section--withoutTax.price--withoutTax');
                 if (!mainPriceSection) {
                     modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                     quickviewRequestCache.delete(cacheKey);
                     return;
                 }
@@ -1935,7 +2015,6 @@
                 const priceEl = mainPriceSection.querySelector('.price');
                 if (!priceEl) {
                     modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                     quickviewRequestCache.delete(cacheKey);
                     return;
                 }
@@ -1943,6 +2022,9 @@
                 if (!priceEl.getAttribute('data-original-price')) {
                     priceEl.setAttribute('data-original-price', priceEl.textContent.trim());
                 }
+
+                priceEl.textContent = 'Loading...';
+                priceEl.setAttribute('data-epicor-loading', 'true');
 
                 const sku = epicorInstance?.getSkuFromElement(modal) ||
                     quickviewBtn.dataset.productSku ||
@@ -1967,20 +2049,20 @@
                             priceEl.textContent = fallback;
                         })
                         .finally(() => {
+                            priceEl.removeAttribute('data-epicor-loading');
                             modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                            modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                             setTimeout(() => quickviewRequestCache.delete(cacheKey), 500);
                         });
                 } else {
                     setTimeout(() => {
                         const originalPrice = priceEl.getAttribute('data-original-price') || priceEl.textContent;
                         priceEl.textContent = originalPrice;
+                        priceEl.removeAttribute('data-epicor-loading');
                         modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                        modalPriceContentEls.forEach(el => (el.style.display = 'block'));
                         quickviewRequestCache.delete(cacheKey);
                     }, 1000);
                 }
-            }, 800);
+            }, 100);
 
             setTimeout(() => {
                 setupQuickviewAddToCartListener(modal, actualProductId);
