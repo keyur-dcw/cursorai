@@ -17,10 +17,14 @@
         BIGCOMMERCE_AUTH_TOKEN: 'pte9meprexvgw4td3ajlirxdsvk0e07',
         CACHE_TIMEOUT: 5 * 60 * 1000,
         BATCH_SIZE: 3,
-        VIEW_EDIT_CART_MAX_WAIT: 2000,
+        VIEW_EDIT_CART_MAX_WAIT: 10000,
         VIEW_EDIT_CART_MIN_SPIN: 400,
+        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 2000,
+        VIEW_EDIT_CART_LOADER_FALLBACK: 15000,
         N8N_STATUS_CHECK_INTERVAL: 100
     };
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     ensureN8NProcessingStatus();
 
@@ -1225,7 +1229,7 @@
 
             this.loaderFallbackTimeout = window.setTimeout(() => {
                 this.hideLoaderAfterUpdate();
-            }, CONFIG.VIEW_EDIT_CART_MAX_WAIT);
+            }, CONFIG.VIEW_EDIT_CART_LOADER_FALLBACK);
         }
 
         // Hide loader after updating prices
@@ -2138,6 +2142,19 @@
             const deadline = start + timeoutMs;
             const earliestRelease = start + Math.max(0, minWaitMs || 0);
             const interval = Math.max(25, checkIntervalMs || 25);
+            let settled = false;
+
+            const settle = (result) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                resolve({
+                    completed: Boolean(result?.completed),
+                    timedOut: Boolean(result?.timedOut),
+                    waitedMs: Date.now() - start
+                });
+            };
 
             const check = () => {
                 const status = window.N8NProcessingStatus;
@@ -2151,12 +2168,12 @@
                 const now = Date.now();
 
                 if (!stillProcessing && now >= earliestRelease) {
-                    resolve(true);
+                    settle({ completed: true, timedOut: false });
                     return;
                 }
 
                 if (now >= deadline) {
-                    resolve(!stillProcessing);
+                    settle({ completed: !stillProcessing, timedOut: stillProcessing });
                     return;
                 }
 
@@ -2228,11 +2245,18 @@
                     window.EpicorN8NPricing.showLoaderBeforeUpdate();
                 }
 
-                const completed = await waitForN8NProcessingToFinish({
+                const { completed, timedOut } = await waitForN8NProcessingToFinish({
                     timeoutMs: CONFIG.VIEW_EDIT_CART_MAX_WAIT,
                     minWaitMs: CONFIG.VIEW_EDIT_CART_MIN_SPIN,
                     checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
                 });
+
+                if (completed) {
+                    await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
+                } else if (timedOut) {
+                    markN8NProcessingComplete();
+                    markCartUpdateComplete();
+                }
 
                 if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
                     window.EpicorN8NPricing.hideLoaderAfterUpdate();
@@ -2242,17 +2266,13 @@
                     stopBigCommerceLoader();
                 }
 
-                if (!completed) {
-                    markN8NProcessingComplete();
-                    markCartUpdateComplete();
-                }
-
                 status.awaitingCartNavigation = false;
 
                 if (wantsNewTab) {
                     const targetAttr = trigger.getAttribute('target') || '_blank';
                     window.open(destination, targetAttr);
                 } else {
+                    await sleep(100);
                     window.location.assign(destination);
                 }
             })().catch(() => {
