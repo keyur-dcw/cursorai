@@ -1374,36 +1374,53 @@
                     return;
                 }
 
+                const assignIfNumeric = (target) => {
+                    if (!target) {
+                        return;
+                    }
+                    const trimmed = target.textContent.trim();
+                    if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                        target.textContent = quantityText;
+                    }
+                };
+
                 if (!element.children || element.children.length === 0) {
-                    element.textContent = quantityText;
+                    assignIfNumeric(element);
                     return;
                 }
 
-                const explicitChild = element.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display');
+                const explicitChild = element.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value');
                 if (explicitChild && explicitChild !== element) {
                     setSimpleText(explicitChild);
                     return;
                 }
 
-                const textNode = Array.from(element.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
-                if (textNode) {
-                    textNode.textContent = quantityText;
-                } else {
-                    element.setAttribute('data-quantity', quantityText);
+                const numericTextNode = Array.from(element.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(node.textContent));
+                if (numericTextNode) {
+                    numericTextNode.textContent = quantityText;
                 }
             };
 
-            const quantityInputs = cartItemElement.querySelectorAll('input[name="qty[]"], input[name="qty"], input[data-field-type="Quantity"], input[type="number"][data-cart-itemid]');
+            const quantityInputs = cartItemElement.querySelectorAll('input[name="qty[]"], input[name="qty"], input[data-field-type="Quantity"], input[data-cart-item-quantity], input[data-cart-item-quantity-value], input[type="number"][data-cart-itemid]');
             quantityInputs.forEach((input) => {
                 input.value = normalizedQuantity;
                 input.setAttribute('value', quantityText);
+                input.defaultValue = quantityText;
                 updateAriaValue(input);
+                try {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch (e) {
+                }
             });
 
             const quantityAttributeHolders = cartItemElement.querySelectorAll('[data-cart-item-quantity]');
             quantityAttributeHolders.forEach((node) => {
                 node.setAttribute('data-cart-item-quantity', quantityText);
                 updateAriaValue(node);
+                if (node.dataset && node.dataset.cartItemQuantity !== undefined) {
+                    node.dataset.cartItemQuantity = quantityText;
+                }
             });
 
             const displaySelectors = [
@@ -1411,8 +1428,6 @@
                 '[data-cart-item-quantity-display]',
                 '.cart-item-quantity-value',
                 '.cart-item-qty-value',
-                '.cart-item-quantity-text',
-                '.cart-item-quantity-display',
                 '.previewCart-item-qty',
                 '.previewCart-item-quantity'
             ];
@@ -1429,6 +1444,14 @@
                 } else {
                     setSimpleText(node);
                     updateAriaValue(node);
+                }
+                if (node.dataset) {
+                    if (node.dataset.cartItemQuantityValue !== undefined) {
+                        node.dataset.cartItemQuantityValue = quantityText;
+                    }
+                    if (node.dataset.cartItemQuantityDisplay !== undefined) {
+                        node.dataset.cartItemQuantityDisplay = quantityText;
+                    }
                 }
             });
 
@@ -1458,8 +1481,7 @@
                 '[data-cart-item-quantity]',
                 '.cart-item-quantity-value',
                 '.cart-item-qty-value',
-                '.cart-item-quantity-display',
-                '.cart-item-quantity'
+                '.cart-item-quantity-display'
             ];
 
             const elements = document.querySelectorAll(fallbackSelectors.join(', '));
@@ -1476,25 +1498,39 @@
                         if (target.hasAttribute('aria-valuenow')) {
                             target.setAttribute('aria-valuenow', quantityText);
                         }
+                        target.defaultValue = quantityText;
                         return;
                     }
 
-                    if (!target.children || target.children.length === 0) {
-                        target.textContent = quantityText;
-                        return;
+                    if (target.dataset) {
+                        if (target.dataset.cartItemQuantity !== undefined) {
+                            target.dataset.cartItemQuantity = quantityText;
+                        }
+                        if (target.dataset.cartItemQuantityValue !== undefined) {
+                            target.dataset.cartItemQuantityValue = quantityText;
+                        }
+                        if (target.dataset.cartItemQuantityDisplay !== undefined) {
+                            target.dataset.cartItemQuantityDisplay = quantityText;
+                        }
                     }
 
-                    const explicitChild = target.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display');
+                    const explicitChild = target.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value');
                     if (explicitChild && explicitChild !== target) {
                         applyQuantityToElement(explicitChild);
                         return;
                     }
 
-                    const textNode = Array.from(target.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
-                    if (textNode) {
-                        textNode.textContent = quantityText;
-                    } else {
-                        target.setAttribute('data-quantity', quantityText);
+                    if (!target.children || target.children.length === 0) {
+                        const trimmed = target.textContent.trim();
+                        if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                            target.textContent = quantityText;
+                        }
+                        return;
+                    }
+
+                    const numericTextNode = Array.from(target.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(node.textContent));
+                    if (numericTextNode) {
+                        numericTextNode.textContent = quantityText;
                     }
                 };
 
@@ -1551,11 +1587,18 @@
                 }
 
                 if (!node.children || node.children.length === 0) {
-                    node.textContent = quantityText;
+                    const trimmed = node.textContent.trim();
+                    if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                        node.textContent = quantityText;
+                    }
                 } else {
-                    const textNode = Array.from(node.childNodes || []).find((child) => child.nodeType === Node.TEXT_NODE && child.textContent.trim().length > 0);
+                    const textNode = Array.from(node.childNodes || []).find((child) => child.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(child.textContent));
                     if (textNode) {
                         textNode.textContent = quantityText;
+                    }
+                    const innerNumeric = node.querySelector('[data-cart-count-value], .cart-count-value, .countPill-value, .countPill-number');
+                    if (innerNumeric) {
+                        applyQuantityToNode(innerNumeric);
                     }
                 }
 
@@ -1592,6 +1635,17 @@
                     }
 
                     updatedNodes.add(node);
+                    if (node.dataset) {
+                        if (node.dataset.cartQuantity !== undefined) {
+                            node.dataset.cartQuantity = quantityText;
+                        }
+                        if (node.dataset.cartCount !== undefined) {
+                            node.dataset.cartCount = quantityText;
+                        }
+                        if (node.dataset.cartPreviewCount !== undefined) {
+                            node.dataset.cartPreviewCount = quantityText;
+                        }
+                    }
                     applyQuantityToNode(node);
                 });
             });
