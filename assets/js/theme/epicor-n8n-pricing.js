@@ -18,9 +18,10 @@
         CACHE_TIMEOUT: 5 * 60 * 1000,
         BATCH_SIZE: 3,
         VIEW_EDIT_CART_MAX_WAIT: 20000,
-        VIEW_EDIT_CART_MIN_SPIN: 10000,
-        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 2000,
+        VIEW_EDIT_CART_MIN_SPIN: 8000,
+        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 0,
         VIEW_EDIT_CART_LOADER_FALLBACK: 15000,
+        VIEW_EDIT_CART_FORCE_REDIRECT_AFTER: 8000,
         N8N_STATUS_CHECK_INTERVAL: 100
     };
 
@@ -2334,9 +2335,56 @@
                     destination = '/cart.php';
                 }
 
+                let navigationFinalized = false;
+                let fallbackTimerId = null;
+
+                const finalizeNavigation = async ({ delayMs = 0, forceComplete = false, destOverride } = {}) => {
+                    if (navigationFinalized) {
+                        return;
+                    }
+                    navigationFinalized = true;
+
+                    if (fallbackTimerId) {
+                        clearTimeout(fallbackTimerId);
+                        fallbackTimerId = null;
+                    }
+
+                    if (delayMs > 0) {
+                        await sleep(delayMs);
+                    }
+
+                    if (forceComplete) {
+                        markN8NProcessingComplete();
+                        markCartUpdateComplete();
+                    }
+
+                    status.awaitingCartNavigation = false;
+
+                    if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
+                        window.EpicorN8NPricing.hideLoaderAfterUpdate();
+                    }
+
+                    if (typeof stopBigCommerceLoader === 'function') {
+                        stopBigCommerceLoader();
+                    }
+
+                    const targetDestination = destOverride || destination || '/cart.php';
+
+                    if (wantsNewTab) {
+                        const targetAttr = trigger.getAttribute('target') || '_blank';
+                        window.open(targetDestination, targetAttr);
+                    } else {
+                        window.location.assign(targetDestination);
+                    }
+                };
+
                 if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.showLoaderBeforeUpdate === 'function') {
                     window.EpicorN8NPricing.showLoaderBeforeUpdate();
                 }
+
+                fallbackTimerId = window.setTimeout(() => {
+                    finalizeNavigation({ forceComplete: true, destOverride: '/cart.php' });
+                }, CONFIG.VIEW_EDIT_CART_FORCE_REDIRECT_AFTER);
 
                 const waitResult = await waitForN8NProcessingToFinish({
                     timeoutMs: Math.max(CONFIG.VIEW_EDIT_CART_MAX_WAIT, CONFIG.VIEW_EDIT_CART_MIN_SPIN),
@@ -2344,30 +2392,19 @@
                     checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
                 });
 
-                if (waitResult.completed) {
-                    await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
-                } else if (waitResult.timedOut) {
-                    markN8NProcessingComplete();
-                    markCartUpdateComplete();
+                if (navigationFinalized) {
+                    return;
                 }
 
-                if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
-                    window.EpicorN8NPricing.hideLoaderAfterUpdate();
+                if (waitResult.timedOut) {
+                    await finalizeNavigation({ forceComplete: true });
+                    return;
                 }
 
-                if (typeof stopBigCommerceLoader === 'function') {
-                    stopBigCommerceLoader();
-                }
-
-                status.awaitingCartNavigation = false;
-
-                if (wantsNewTab) {
-                    const targetAttr = trigger.getAttribute('target') || '_blank';
-                    window.open(destination, targetAttr);
-                } else {
-                    await sleep(100);
-                    window.location.assign(destination);
-                }
+                await finalizeNavigation({
+                    delayMs: CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY,
+                    forceComplete: true
+                });
             })().catch(() => {
                 status.awaitingCartNavigation = false;
                 if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
