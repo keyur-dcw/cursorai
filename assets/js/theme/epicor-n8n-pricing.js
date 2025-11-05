@@ -1349,6 +1349,313 @@
             return null;
         }
 
+        updateCartItemQuantityDisplay(cartItemElement, quantity) {
+            if (!cartItemElement) {
+                return;
+            }
+
+            const normalizedQuantity = Number(quantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            const quantityText = String(normalizedQuantity);
+            cartItemElement.setAttribute('data-quantity', quantityText);
+
+            const updateAriaValue = (element) => {
+                if (element && element.hasAttribute && element.hasAttribute('aria-valuenow')) {
+                    element.setAttribute('aria-valuenow', quantityText);
+                }
+            };
+
+            const setSimpleText = (element) => {
+                if (!element || element.tagName === 'INPUT' || element.tagName === 'SELECT') {
+                    return;
+                }
+
+                const assignIfNumeric = (target) => {
+                    if (!target) {
+                        return;
+                    }
+                    const trimmed = target.textContent.trim();
+                    if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                        target.textContent = quantityText;
+                    }
+                };
+
+                if (!element.children || element.children.length === 0) {
+                    assignIfNumeric(element);
+                    return;
+                }
+
+                const explicitChild = element.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value');
+                if (explicitChild && explicitChild !== element) {
+                    setSimpleText(explicitChild);
+                    return;
+                }
+
+                const numericTextNode = Array.from(element.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(node.textContent));
+                if (numericTextNode) {
+                    numericTextNode.textContent = quantityText;
+                }
+            };
+
+            const quantityInputs = cartItemElement.querySelectorAll('input[name="qty[]"], input[name="qty"], input[data-field-type="Quantity"], input[data-cart-item-quantity], input[data-cart-item-quantity-value], input[type="number"][data-cart-itemid]');
+            quantityInputs.forEach((input) => {
+                input.value = normalizedQuantity;
+                input.setAttribute('value', quantityText);
+                input.defaultValue = quantityText;
+                updateAriaValue(input);
+                try {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch (e) {
+                }
+            });
+
+            const quantityAttributeHolders = cartItemElement.querySelectorAll('[data-cart-item-quantity]');
+            quantityAttributeHolders.forEach((node) => {
+                node.setAttribute('data-cart-item-quantity', quantityText);
+                updateAriaValue(node);
+                if (node.dataset && node.dataset.cartItemQuantity !== undefined) {
+                    node.dataset.cartItemQuantity = quantityText;
+                }
+            });
+
+            const displaySelectors = [
+                '[data-cart-item-quantity-value]',
+                '[data-cart-item-quantity-display]',
+                '.cart-item-quantity-value',
+                '.cart-item-qty-value',
+                '.previewCart-item-qty',
+                '.previewCart-item-quantity'
+            ];
+
+            const displayNodes = cartItemElement.querySelectorAll(displaySelectors.join(', '));
+            displayNodes.forEach((node) => {
+                if (!node) {
+                    return;
+                }
+                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                    node.value = normalizedQuantity;
+                    node.setAttribute('value', quantityText);
+                    updateAriaValue(node);
+                } else {
+                    setSimpleText(node);
+                    updateAriaValue(node);
+                }
+                if (node.dataset) {
+                    if (node.dataset.cartItemQuantityValue !== undefined) {
+                        node.dataset.cartItemQuantityValue = quantityText;
+                    }
+                    if (node.dataset.cartItemQuantityDisplay !== undefined) {
+                        node.dataset.cartItemQuantityDisplay = quantityText;
+                    }
+                }
+            });
+
+            const dataQuantityNodes = cartItemElement.querySelectorAll('[data-quantity]');
+            dataQuantityNodes.forEach((node) => {
+                node.setAttribute('data-quantity', quantityText);
+            });
+        }
+
+        updateCartItemQuantityFallback(index, quantity) {
+            const normalizedQuantity = Number(quantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            const cartRows = document.querySelectorAll('tr.cart-item, .cart-item');
+            if (cartRows && cartRows[index]) {
+                this.updateCartItemQuantityDisplay(cartRows[index], normalizedQuantity);
+                return;
+            }
+
+            const quantityText = String(normalizedQuantity);
+            const fallbackSelectors = [
+                '[data-cart-item-quantity-value]',
+                '[data-cart-item-quantity-display]',
+                '[data-cart-item-quantity]',
+                '.cart-item-quantity-value',
+                '.cart-item-qty-value',
+                '.cart-item-quantity-display'
+            ];
+
+            const elements = document.querySelectorAll(fallbackSelectors.join(', '));
+            if (elements && elements[index]) {
+                const element = elements[index];
+                const applyQuantityToElement = (target) => {
+                    if (!target) {
+                        return;
+                    }
+
+                    if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
+                        target.value = normalizedQuantity;
+                        target.setAttribute('value', quantityText);
+                        if (target.hasAttribute('aria-valuenow')) {
+                            target.setAttribute('aria-valuenow', quantityText);
+                        }
+                        target.defaultValue = quantityText;
+                        return;
+                    }
+
+                    if (target.dataset) {
+                        if (target.dataset.cartItemQuantity !== undefined) {
+                            target.dataset.cartItemQuantity = quantityText;
+                        }
+                        if (target.dataset.cartItemQuantityValue !== undefined) {
+                            target.dataset.cartItemQuantityValue = quantityText;
+                        }
+                        if (target.dataset.cartItemQuantityDisplay !== undefined) {
+                            target.dataset.cartItemQuantityDisplay = quantityText;
+                        }
+                    }
+
+                    const explicitChild = target.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value');
+                    if (explicitChild && explicitChild !== target) {
+                        applyQuantityToElement(explicitChild);
+                        return;
+                    }
+
+                    if (!target.children || target.children.length === 0) {
+                        const trimmed = target.textContent.trim();
+                        if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                            target.textContent = quantityText;
+                        }
+                        return;
+                    }
+
+                    const numericTextNode = Array.from(target.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(node.textContent));
+                    if (numericTextNode) {
+                        numericTextNode.textContent = quantityText;
+                    }
+                };
+
+                applyQuantityToElement(element);
+            }
+        }
+
+        calculateCartQuantity(cartData) {
+            if (!cartData) {
+                return 0;
+            }
+
+            const sumQuantities = (items) => {
+                if (!isArray(items)) {
+                    return 0;
+                }
+                return items.reduce((total, item) => total + (Number(item?.quantity) || 0), 0);
+            };
+
+            const camelLineItems = cartData.lineItems || {};
+            const snakeLineItems = cartData.line_items || {};
+
+            const physicalItems = camelLineItems.physicalItems || snakeLineItems.physical_items || [];
+            const digitalItems = camelLineItems.digitalItems || snakeLineItems.digital_items || [];
+            const customItems = camelLineItems.customItems || snakeLineItems.custom_items || [];
+            const giftCertificates = camelLineItems.giftCertificates || snakeLineItems.gift_certificates || [];
+
+            return sumQuantities(physicalItems) +
+                sumQuantities(digitalItems) +
+                sumQuantities(customItems) +
+                sumQuantities(giftCertificates);
+        }
+
+        updateCartQuantityBadge(totalQuantity) {
+            const normalizedQuantity = Number(totalQuantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            const quantityText = String(normalizedQuantity);
+            const applyQuantityToNode = (node) => {
+                if (!node) {
+                    return;
+                }
+
+                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                    node.value = normalizedQuantity;
+                    node.setAttribute('value', quantityText);
+                    if (node.hasAttribute('aria-valuenow')) {
+                        node.setAttribute('aria-valuenow', quantityText);
+                    }
+                    return;
+                }
+
+                if (!node.children || node.children.length === 0) {
+                    const trimmed = node.textContent.trim();
+                    if (trimmed === '' || /^\d+(?:\.\d+)?$/.test(trimmed)) {
+                        node.textContent = quantityText;
+                    }
+                } else {
+                    const textNode = Array.from(node.childNodes || []).find((child) => child.nodeType === Node.TEXT_NODE && /^\s*\d+(?:\.\d+)?\s*$/.test(child.textContent));
+                    if (textNode) {
+                        textNode.textContent = quantityText;
+                    }
+                    const innerNumeric = node.querySelector('[data-cart-count-value], .cart-count-value, .countPill-value, .countPill-number');
+                    if (innerNumeric) {
+                        applyQuantityToNode(innerNumeric);
+                    }
+                }
+
+                if (node.hasAttribute('data-cart-quantity')) {
+                    node.setAttribute('data-cart-quantity', quantityText);
+                }
+                if (node.hasAttribute('data-cart-count')) {
+                    node.setAttribute('data-cart-count', quantityText);
+                }
+                if (node.hasAttribute('data-cart-preview-count')) {
+                    node.setAttribute('data-cart-preview-count', quantityText);
+                }
+            };
+
+            const quantitySelectors = [
+                '[data-cart-quantity]',
+                '[data-cart-count]',
+                '[data-cart-preview-count]',
+                '.navUser-item-cart .countPill',
+                '.navUser-action .countPill',
+                '.cart-quantity',
+                '.cart-count',
+                '.header-cart-count',
+                '.previewCart-count'
+            ];
+
+            const updatedNodes = new Set();
+
+            quantitySelectors.forEach(selector => {
+                const matches = document.querySelectorAll(selector);
+                matches.forEach(node => {
+                    if (!node || updatedNodes.has(node)) {
+                        return;
+                    }
+
+                    updatedNodes.add(node);
+                    if (node.dataset) {
+                        if (node.dataset.cartQuantity !== undefined) {
+                            node.dataset.cartQuantity = quantityText;
+                        }
+                        if (node.dataset.cartCount !== undefined) {
+                            node.dataset.cartCount = quantityText;
+                        }
+                        if (node.dataset.cartPreviewCount !== undefined) {
+                            node.dataset.cartPreviewCount = quantityText;
+                        }
+                    }
+                    applyQuantityToNode(node);
+                });
+            });
+
+            const previewCount = document.querySelector('[data-cart-preview-count-trigger], [data-cart-preview-count-badge]');
+            if (previewCount && !updatedNodes.has(previewCount)) {
+                applyQuantityToNode(previewCount);
+            }
+        }
+
         // Update cart prices directly in DOM
         updateCartPricesInDOM(cartItems) {
 
@@ -1363,6 +1670,8 @@
                 const cartItemElement = this.getCartItemElementById(itemId, index);
 
                 if (cartItemElement) {
+                    this.updateCartItemQuantityDisplay(cartItemElement, quantity);
+
                     const unitPriceSelectors = [
                         'span.cart-item-value:not(strong)',
                         '.cart-item-value:not(strong)',
@@ -1418,6 +1727,8 @@
                             fallbackTotals[index].style.setProperty('opacity', '1');
                             fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
                         }
+
+                        this.updateCartItemQuantityFallback(index, quantity);
                     }
                 } else {
                     const fallbackPriceEls = document.querySelectorAll('span.cart-item-value:not(strong), .cart-item-value:not(strong)');
@@ -1431,6 +1742,8 @@
                         fallbackTotals[index].style.setProperty('opacity', '1');
                         fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
                     }
+
+                    this.updateCartItemQuantityFallback(index, quantity);
                 }
             });
 
@@ -1627,9 +1940,12 @@
 
             let totalPrice = 0;
 
-            if (cartData.lineItems && cartData.lineItems.physicalItems) {
+            const physicalItems = (cartData.lineItems && cartData.lineItems.physicalItems) ||
+                (cartData.line_items && cartData.line_items.physical_items) || [];
 
-                cartData.lineItems.physicalItems.forEach((item, index) => {
+            if (isArray(physicalItems)) {
+
+                physicalItems.forEach((item, index) => {
 
                     const itemPrice = item.listPrice || item.list_price || item.originalPrice || item.original_price || item.salePrice || item.sale_price || 0;
                     const itemTotal = item.extendedListPrice || item.extended_list_price || item.extendedSalePrice || item.extended_sale_price || (itemPrice * item.quantity);
@@ -1651,6 +1967,8 @@
                     }
 
                     if (cartItemElement) {
+                        this.updateCartItemQuantityDisplay(cartItemElement, item.quantity);
+
                         const priceSelectors = [
                             'span.cart-item-value:not(strong)',
                             '.cart-item-value:not(strong)',
@@ -1697,6 +2015,9 @@
                             }
                         }
 
+                        totalPrice += itemTotal;
+                    } else {
+                        this.updateCartItemQuantityFallback(index, item.quantity);
                         totalPrice += itemTotal;
                     }
                 });
@@ -1756,6 +2077,9 @@
                     }
                 }
             }
+
+            const totalQuantity = this.calculateCartQuantity(cartData);
+            this.updateCartQuantityBadge(totalQuantity);
 
         }
 
