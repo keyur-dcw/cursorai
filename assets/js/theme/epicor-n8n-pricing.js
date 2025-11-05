@@ -1360,45 +1360,81 @@
                 return;
             }
 
-            cartItemElement.setAttribute('data-quantity', String(normalizedQuantity));
+            const quantityText = String(normalizedQuantity);
+            cartItemElement.setAttribute('data-quantity', quantityText);
 
-            const quantityHolders = cartItemElement.querySelectorAll('[data-cart-item-quantity]');
-            quantityHolders.forEach((node) => {
-                if (!node) {
+            const updateAriaValue = (element) => {
+                if (element && element.hasAttribute && element.hasAttribute('aria-valuenow')) {
+                    element.setAttribute('aria-valuenow', quantityText);
+                }
+            };
+
+            const setSimpleText = (element) => {
+                if (!element || element.tagName === 'INPUT' || element.tagName === 'SELECT') {
                     return;
                 }
 
-                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
-                    node.value = normalizedQuantity;
-                    node.setAttribute('value', String(normalizedQuantity));
-                } else {
-                    node.textContent = normalizedQuantity;
+                if (!element.children || element.children.length === 0) {
+                    element.textContent = quantityText;
+                    return;
                 }
 
-                if (node.hasAttribute('aria-valuenow')) {
-                    node.setAttribute('aria-valuenow', normalizedQuantity);
+                const explicitChild = element.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display');
+                if (explicitChild && explicitChild !== element) {
+                    setSimpleText(explicitChild);
+                    return;
                 }
-            });
+
+                const textNode = Array.from(element.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
+                if (textNode) {
+                    textNode.textContent = quantityText;
+                } else {
+                    element.setAttribute('data-quantity', quantityText);
+                }
+            };
 
             const quantityInputs = cartItemElement.querySelectorAll('input[name="qty[]"], input[name="qty"], input[data-field-type="Quantity"], input[type="number"][data-cart-itemid]');
             quantityInputs.forEach((input) => {
                 input.value = normalizedQuantity;
-                input.setAttribute('value', String(normalizedQuantity));
-                if (input.hasAttribute('aria-valuenow')) {
-                    input.setAttribute('aria-valuenow', normalizedQuantity);
-                }
+                input.setAttribute('value', quantityText);
+                updateAriaValue(input);
             });
 
-            const quantityDisplays = cartItemElement.querySelectorAll('.cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display, .cart-item-quantity');
-            quantityDisplays.forEach((display) => {
-                if (display.tagName !== 'INPUT' && display.tagName !== 'SELECT') {
-                    display.textContent = normalizedQuantity;
+            const quantityAttributeHolders = cartItemElement.querySelectorAll('[data-cart-item-quantity]');
+            quantityAttributeHolders.forEach((node) => {
+                node.setAttribute('data-cart-item-quantity', quantityText);
+                updateAriaValue(node);
+            });
+
+            const displaySelectors = [
+                '[data-cart-item-quantity-value]',
+                '[data-cart-item-quantity-display]',
+                '.cart-item-quantity-value',
+                '.cart-item-qty-value',
+                '.cart-item-quantity-text',
+                '.cart-item-quantity-display',
+                '.previewCart-item-qty',
+                '.previewCart-item-quantity'
+            ];
+
+            const displayNodes = cartItemElement.querySelectorAll(displaySelectors.join(', '));
+            displayNodes.forEach((node) => {
+                if (!node) {
+                    return;
+                }
+                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                    node.value = normalizedQuantity;
+                    node.setAttribute('value', quantityText);
+                    updateAriaValue(node);
+                } else {
+                    setSimpleText(node);
+                    updateAriaValue(node);
                 }
             });
 
             const dataQuantityNodes = cartItemElement.querySelectorAll('[data-quantity]');
-            dataQuantityNodes.forEach(node => {
-                node.setAttribute('data-quantity', String(normalizedQuantity));
+            dataQuantityNodes.forEach((node) => {
+                node.setAttribute('data-quantity', quantityText);
             });
         }
 
@@ -1415,18 +1451,54 @@
                 return;
             }
 
-            const quantityElements = document.querySelectorAll('[data-cart-item-quantity], .cart-item-quantity-value, .cart-item-quantity');
-            if (quantityElements && quantityElements[index]) {
-                const element = quantityElements[index];
-                if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-                    element.value = normalizedQuantity;
-                    element.setAttribute('value', String(normalizedQuantity));
-                    if (element.hasAttribute('aria-valuenow')) {
-                        element.setAttribute('aria-valuenow', normalizedQuantity);
+            const quantityText = String(normalizedQuantity);
+            const fallbackSelectors = [
+                '[data-cart-item-quantity-value]',
+                '[data-cart-item-quantity-display]',
+                '[data-cart-item-quantity]',
+                '.cart-item-quantity-value',
+                '.cart-item-qty-value',
+                '.cart-item-quantity-display',
+                '.cart-item-quantity'
+            ];
+
+            const elements = document.querySelectorAll(fallbackSelectors.join(', '));
+            if (elements && elements[index]) {
+                const element = elements[index];
+                const applyQuantityToElement = (target) => {
+                    if (!target) {
+                        return;
                     }
-                } else {
-                    element.textContent = normalizedQuantity;
-                }
+
+                    if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
+                        target.value = normalizedQuantity;
+                        target.setAttribute('value', quantityText);
+                        if (target.hasAttribute('aria-valuenow')) {
+                            target.setAttribute('aria-valuenow', quantityText);
+                        }
+                        return;
+                    }
+
+                    if (!target.children || target.children.length === 0) {
+                        target.textContent = quantityText;
+                        return;
+                    }
+
+                    const explicitChild = target.querySelector('[data-cart-item-quantity-value], .cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display');
+                    if (explicitChild && explicitChild !== target) {
+                        applyQuantityToElement(explicitChild);
+                        return;
+                    }
+
+                    const textNode = Array.from(target.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
+                    if (textNode) {
+                        textNode.textContent = quantityText;
+                    } else {
+                        target.setAttribute('data-quantity', quantityText);
+                    }
+                };
+
+                applyQuantityToElement(element);
             }
         }
 
@@ -1463,6 +1535,41 @@
                 return;
             }
 
+            const quantityText = String(normalizedQuantity);
+            const applyQuantityToNode = (node) => {
+                if (!node) {
+                    return;
+                }
+
+                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                    node.value = normalizedQuantity;
+                    node.setAttribute('value', quantityText);
+                    if (node.hasAttribute('aria-valuenow')) {
+                        node.setAttribute('aria-valuenow', quantityText);
+                    }
+                    return;
+                }
+
+                if (!node.children || node.children.length === 0) {
+                    node.textContent = quantityText;
+                } else {
+                    const textNode = Array.from(node.childNodes || []).find((child) => child.nodeType === Node.TEXT_NODE && child.textContent.trim().length > 0);
+                    if (textNode) {
+                        textNode.textContent = quantityText;
+                    }
+                }
+
+                if (node.hasAttribute('data-cart-quantity')) {
+                    node.setAttribute('data-cart-quantity', quantityText);
+                }
+                if (node.hasAttribute('data-cart-count')) {
+                    node.setAttribute('data-cart-count', quantityText);
+                }
+                if (node.hasAttribute('data-cart-preview-count')) {
+                    node.setAttribute('data-cart-preview-count', quantityText);
+                }
+            };
+
             const quantitySelectors = [
                 '[data-cart-quantity]',
                 '[data-cart-count]',
@@ -1485,44 +1592,13 @@
                     }
 
                     updatedNodes.add(node);
-
-                    if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
-                        node.value = normalizedQuantity;
-                        node.setAttribute('value', String(normalizedQuantity));
-                    } else {
-                        node.textContent = normalizedQuantity;
-                    }
-
-                    if (node.hasAttribute('data-cart-quantity')) {
-                        node.setAttribute('data-cart-quantity', String(normalizedQuantity));
-                    }
-
-                    if (node.hasAttribute('data-cart-count')) {
-                        node.setAttribute('data-cart-count', String(normalizedQuantity));
-                    }
-
-                    if (node.hasAttribute('data-cart-preview-count')) {
-                        node.setAttribute('data-cart-preview-count', String(normalizedQuantity));
-                    }
+                    applyQuantityToNode(node);
                 });
             });
 
             const previewCount = document.querySelector('[data-cart-preview-count-trigger], [data-cart-preview-count-badge]');
-            if (previewCount) {
-                if (previewCount.tagName === 'INPUT' || previewCount.tagName === 'SELECT') {
-                    previewCount.value = normalizedQuantity;
-                    previewCount.setAttribute('value', String(normalizedQuantity));
-                } else {
-                    previewCount.textContent = normalizedQuantity;
-                }
-
-                if (previewCount.hasAttribute('data-cart-count')) {
-                    previewCount.setAttribute('data-cart-count', String(normalizedQuantity));
-                }
-
-                if (previewCount.hasAttribute('data-cart-preview-count')) {
-                    previewCount.setAttribute('data-cart-preview-count', String(normalizedQuantity));
-                }
+            if (previewCount && !updatedNodes.has(previewCount)) {
+                applyQuantityToNode(previewCount);
             }
         }
 
