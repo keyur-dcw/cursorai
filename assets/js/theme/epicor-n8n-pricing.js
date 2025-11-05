@@ -1349,6 +1349,183 @@
             return null;
         }
 
+        updateCartItemQuantityDisplay(cartItemElement, quantity) {
+            if (!cartItemElement) {
+                return;
+            }
+
+            const normalizedQuantity = Number(quantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            cartItemElement.setAttribute('data-quantity', String(normalizedQuantity));
+
+            const quantityHolders = cartItemElement.querySelectorAll('[data-cart-item-quantity]');
+            quantityHolders.forEach((node) => {
+                if (!node) {
+                    return;
+                }
+
+                if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                    node.value = normalizedQuantity;
+                    node.setAttribute('value', String(normalizedQuantity));
+                } else {
+                    node.textContent = normalizedQuantity;
+                }
+
+                if (node.hasAttribute('aria-valuenow')) {
+                    node.setAttribute('aria-valuenow', normalizedQuantity);
+                }
+            });
+
+            const quantityInputs = cartItemElement.querySelectorAll('input[name="qty[]"], input[name="qty"], input[data-field-type="Quantity"], input[type="number"][data-cart-itemid]');
+            quantityInputs.forEach((input) => {
+                input.value = normalizedQuantity;
+                input.setAttribute('value', String(normalizedQuantity));
+                if (input.hasAttribute('aria-valuenow')) {
+                    input.setAttribute('aria-valuenow', normalizedQuantity);
+                }
+            });
+
+            const quantityDisplays = cartItemElement.querySelectorAll('.cart-item-quantity-value, .cart-item-qty-value, .cart-item-quantity-display, .cart-item-quantity');
+            quantityDisplays.forEach((display) => {
+                if (display.tagName !== 'INPUT' && display.tagName !== 'SELECT') {
+                    display.textContent = normalizedQuantity;
+                }
+            });
+
+            const dataQuantityNodes = cartItemElement.querySelectorAll('[data-quantity]');
+            dataQuantityNodes.forEach(node => {
+                node.setAttribute('data-quantity', String(normalizedQuantity));
+            });
+        }
+
+        updateCartItemQuantityFallback(index, quantity) {
+            const normalizedQuantity = Number(quantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            const cartRows = document.querySelectorAll('tr.cart-item, .cart-item');
+            if (cartRows && cartRows[index]) {
+                this.updateCartItemQuantityDisplay(cartRows[index], normalizedQuantity);
+                return;
+            }
+
+            const quantityElements = document.querySelectorAll('[data-cart-item-quantity], .cart-item-quantity-value, .cart-item-quantity');
+            if (quantityElements && quantityElements[index]) {
+                const element = quantityElements[index];
+                if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
+                    element.value = normalizedQuantity;
+                    element.setAttribute('value', String(normalizedQuantity));
+                    if (element.hasAttribute('aria-valuenow')) {
+                        element.setAttribute('aria-valuenow', normalizedQuantity);
+                    }
+                } else {
+                    element.textContent = normalizedQuantity;
+                }
+            }
+        }
+
+        calculateCartQuantity(cartData) {
+            if (!cartData) {
+                return 0;
+            }
+
+            const sumQuantities = (items) => {
+                if (!isArray(items)) {
+                    return 0;
+                }
+                return items.reduce((total, item) => total + (Number(item?.quantity) || 0), 0);
+            };
+
+            const camelLineItems = cartData.lineItems || {};
+            const snakeLineItems = cartData.line_items || {};
+
+            const physicalItems = camelLineItems.physicalItems || snakeLineItems.physical_items || [];
+            const digitalItems = camelLineItems.digitalItems || snakeLineItems.digital_items || [];
+            const customItems = camelLineItems.customItems || snakeLineItems.custom_items || [];
+            const giftCertificates = camelLineItems.giftCertificates || snakeLineItems.gift_certificates || [];
+
+            return sumQuantities(physicalItems) +
+                sumQuantities(digitalItems) +
+                sumQuantities(customItems) +
+                sumQuantities(giftCertificates);
+        }
+
+        updateCartQuantityBadge(totalQuantity) {
+            const normalizedQuantity = Number(totalQuantity);
+
+            if (!Number.isFinite(normalizedQuantity)) {
+                return;
+            }
+
+            const quantitySelectors = [
+                '[data-cart-quantity]',
+                '[data-cart-count]',
+                '[data-cart-preview-count]',
+                '.navUser-item-cart .countPill',
+                '.navUser-action .countPill',
+                '.cart-quantity',
+                '.cart-count',
+                '.header-cart-count',
+                '.previewCart-count'
+            ];
+
+            const updatedNodes = new Set();
+
+            quantitySelectors.forEach(selector => {
+                const matches = document.querySelectorAll(selector);
+                matches.forEach(node => {
+                    if (!node || updatedNodes.has(node)) {
+                        return;
+                    }
+
+                    updatedNodes.add(node);
+
+                    if (node.tagName === 'INPUT' || node.tagName === 'SELECT') {
+                        node.value = normalizedQuantity;
+                        node.setAttribute('value', String(normalizedQuantity));
+                    } else {
+                        node.textContent = normalizedQuantity;
+                    }
+
+                    if (node.hasAttribute('data-cart-quantity')) {
+                        node.setAttribute('data-cart-quantity', String(normalizedQuantity));
+                    }
+
+                    if (node.hasAttribute('data-cart-count')) {
+                        node.setAttribute('data-cart-count', String(normalizedQuantity));
+                    }
+
+                    if (node.hasAttribute('data-cart-preview-count')) {
+                        node.setAttribute('data-cart-preview-count', String(normalizedQuantity));
+                    }
+                });
+            });
+
+            const previewCount = document.querySelector('[data-cart-preview-count-trigger], [data-cart-preview-count-badge]');
+            if (previewCount) {
+                if (previewCount.tagName === 'INPUT' || previewCount.tagName === 'SELECT') {
+                    previewCount.value = normalizedQuantity;
+                    previewCount.setAttribute('value', String(normalizedQuantity));
+                } else {
+                    previewCount.textContent = normalizedQuantity;
+                }
+
+                if (previewCount.hasAttribute('data-cart-count')) {
+                    previewCount.setAttribute('data-cart-count', String(normalizedQuantity));
+                }
+
+                if (previewCount.hasAttribute('data-cart-preview-count')) {
+                    previewCount.setAttribute('data-cart-preview-count', String(normalizedQuantity));
+                }
+            }
+        }
+
         // Update cart prices directly in DOM
         updateCartPricesInDOM(cartItems) {
 
@@ -1363,6 +1540,8 @@
                 const cartItemElement = this.getCartItemElementById(itemId, index);
 
                 if (cartItemElement) {
+                    this.updateCartItemQuantityDisplay(cartItemElement, quantity);
+
                     const unitPriceSelectors = [
                         'span.cart-item-value:not(strong)',
                         '.cart-item-value:not(strong)',
@@ -1418,6 +1597,8 @@
                             fallbackTotals[index].style.setProperty('opacity', '1');
                             fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
                         }
+
+                        this.updateCartItemQuantityFallback(index, quantity);
                     }
                 } else {
                     const fallbackPriceEls = document.querySelectorAll('span.cart-item-value:not(strong), .cart-item-value:not(strong)');
@@ -1431,6 +1612,8 @@
                         fallbackTotals[index].style.setProperty('opacity', '1');
                         fallbackTotals[index].textContent = `$${itemTotal.toFixed(2)}`;
                     }
+
+                    this.updateCartItemQuantityFallback(index, quantity);
                 }
             });
 
@@ -1627,9 +1810,12 @@
 
             let totalPrice = 0;
 
-            if (cartData.lineItems && cartData.lineItems.physicalItems) {
+            const physicalItems = (cartData.lineItems && cartData.lineItems.physicalItems) ||
+                (cartData.line_items && cartData.line_items.physical_items) || [];
 
-                cartData.lineItems.physicalItems.forEach((item, index) => {
+            if (isArray(physicalItems)) {
+
+                physicalItems.forEach((item, index) => {
 
                     const itemPrice = item.listPrice || item.list_price || item.originalPrice || item.original_price || item.salePrice || item.sale_price || 0;
                     const itemTotal = item.extendedListPrice || item.extended_list_price || item.extendedSalePrice || item.extended_sale_price || (itemPrice * item.quantity);
@@ -1651,6 +1837,8 @@
                     }
 
                     if (cartItemElement) {
+                        this.updateCartItemQuantityDisplay(cartItemElement, item.quantity);
+
                         const priceSelectors = [
                             'span.cart-item-value:not(strong)',
                             '.cart-item-value:not(strong)',
@@ -1697,6 +1885,9 @@
                             }
                         }
 
+                        totalPrice += itemTotal;
+                    } else {
+                        this.updateCartItemQuantityFallback(index, item.quantity);
                         totalPrice += itemTotal;
                     }
                 });
@@ -1756,6 +1947,9 @@
                     }
                 }
             }
+
+            const totalQuantity = this.calculateCartQuantity(cartData);
+            this.updateCartQuantityBadge(totalQuantity);
 
         }
 
