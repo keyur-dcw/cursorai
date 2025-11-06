@@ -2334,40 +2334,40 @@
                     destination = '/cart.php';
                 }
 
-                if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.showLoaderBeforeUpdate === 'function') {
-                    window.EpicorN8NPricing.showLoaderBeforeUpdate();
-                }
+                  if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.showLoaderBeforeUpdate === 'function') {
+                      window.EpicorN8NPricing.showLoaderBeforeUpdate();
+                  }
 
-                const waitResult = await waitForN8NProcessingToFinish({
-                    timeoutMs: Math.max(CONFIG.VIEW_EDIT_CART_MAX_WAIT, CONFIG.VIEW_EDIT_CART_MIN_SPIN),
-                    minWaitMs: CONFIG.VIEW_EDIT_CART_MIN_SPIN,
-                    checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
-                });
+                  const waitResult = await waitForN8NProcessingToFinish({
+                      timeoutMs: Math.max(CONFIG.VIEW_EDIT_CART_MAX_WAIT, CONFIG.VIEW_EDIT_CART_MIN_SPIN),
+                      minWaitMs: CONFIG.VIEW_EDIT_CART_MIN_SPIN,
+                      checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
+                  });
 
-                if (waitResult.completed) {
-                    await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
-                } else if (waitResult.timedOut) {
-                    markN8NProcessingComplete();
-                    markCartUpdateComplete();
-                }
+                  if (waitResult.completed) {
+                      await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
+                  } else if (waitResult.timedOut) {
+                      markN8NProcessingComplete();
+                      markCartUpdateComplete();
+                  }
 
-                if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
-                    window.EpicorN8NPricing.hideLoaderAfterUpdate();
-                }
+                  if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
+                      window.EpicorN8NPricing.hideLoaderAfterUpdate();
+                  }
 
-                if (typeof stopBigCommerceLoader === 'function') {
-                    stopBigCommerceLoader();
-                }
+                  if (typeof stopBigCommerceLoader === 'function') {
+                      stopBigCommerceLoader();
+                  }
 
-                status.awaitingCartNavigation = false;
+                  status.awaitingCartNavigation = false;
 
-                if (wantsNewTab) {
-                    const targetAttr = trigger.getAttribute('target') || '_blank';
-                    window.open(destination, targetAttr);
-                } else {
-                    await sleep(100);
-                    window.location.assign(destination);
-                }
+                  if (wantsNewTab) {
+                      const targetAttr = trigger.getAttribute('target') || '_blank';
+                      window.open(destination, targetAttr);
+                  } else {
+                      await sleep(100);
+                      window.location.assign(destination);
+                  }
             })().catch(() => {
                 status.awaitingCartNavigation = false;
                 if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
