@@ -18,9 +18,8 @@
         CACHE_TIMEOUT: 5 * 60 * 1000,
         BATCH_SIZE: 3,
         VIEW_EDIT_CART_MAX_WAIT: 20000,
-        VIEW_EDIT_CART_MIN_SPIN: 500,
-        VIEW_EDIT_CART_POST_COMPLETION_SPIN: 5000,
-        VIEW_EDIT_CART_POST_LOADER_DELAY: 2000,
+        VIEW_EDIT_CART_MIN_SPIN: 10000,
+        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 2000,
         VIEW_EDIT_CART_LOADER_FALLBACK: 15000,
         N8N_STATUS_CHECK_INTERVAL: 100
     };
@@ -2346,7 +2345,7 @@
                   });
 
                   if (waitResult.completed) {
-                      await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_SPIN);
+                      await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
                   } else if (waitResult.timedOut) {
                       markN8NProcessingComplete();
                       markCartUpdateComplete();
@@ -2360,14 +2359,13 @@
                       stopBigCommerceLoader();
                   }
 
-                  await sleep(CONFIG.VIEW_EDIT_CART_POST_LOADER_DELAY);
-
                   status.awaitingCartNavigation = false;
 
                   if (wantsNewTab) {
                       const targetAttr = trigger.getAttribute('target') || '_blank';
                       window.open(destination, targetAttr);
                   } else {
+                      await sleep(100);
                       window.location.assign(destination);
                   }
             })().catch(() => {
