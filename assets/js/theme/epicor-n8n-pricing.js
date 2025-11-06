@@ -1957,13 +1957,97 @@
 
     const quickviewRequestCache = new Map();
 
+    function resolveQuickviewIdentifiers(modal, trigger, epicorInstance) {
+        const identifiers = {
+            productId: null,
+            sku: ''
+        };
+
+        const numericCandidates = [];
+
+        const pushNumeric = (value) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+            const trimmed = String(value).trim();
+            if (trimmed && /^\d+$/.test(trimmed)) {
+                numericCandidates.push(trimmed);
+            }
+        };
+
+        pushNumeric(epicorInstance?.getNumericProductId?.(modal));
+        pushNumeric(modal?.getAttribute?.('data-product-id'));
+        pushNumeric(modal?.getAttribute?.('data-entity-id'));
+        pushNumeric(trigger?.dataset?.productId);
+
+        if (modal && typeof modal.querySelector === 'function') {
+            const hiddenInput = modal.querySelector('input[name="product_id"]');
+            if (hiddenInput && hiddenInput.value) {
+                pushNumeric(hiddenInput.value);
+            }
+        }
+
+        if (trigger) {
+            const triggerHidden = trigger.querySelector?.('input[name="product_id"]');
+            if (triggerHidden && triggerHidden.value) {
+                pushNumeric(triggerHidden.value);
+            }
+        }
+
+        identifiers.productId = numericCandidates.length > 0 ? numericCandidates[0] : null;
+
+        const skuCandidates = [];
+
+        if (epicorInstance?.getSkuFromElement) {
+            const skuFromModal = epicorInstance.getSkuFromElement(modal);
+            if (skuFromModal) {
+                skuCandidates.push(skuFromModal);
+            }
+        }
+
+        if (trigger?.dataset?.productSku) {
+            skuCandidates.push(trigger.dataset.productSku);
+        }
+
+        if (modal && typeof modal.querySelector === 'function') {
+            const skuNode = modal.querySelector('[data-product-sku], .card-sku, .product-sku, .productView-sku, .productView-info .sku, [data-test-info-type="sku"]');
+            if (skuNode) {
+                const attrSku = skuNode.getAttribute?.('data-product-sku');
+                if (attrSku) {
+                    skuCandidates.push(attrSku);
+                } else {
+                    const textSku = skuNode.textContent || skuNode.innerText || '';
+                    if (textSku) {
+                        const match = textSku.match(/SKU#?\s*([A-Za-z0-9.\-_]+)/i);
+                        if (match && match[1]) {
+                            skuCandidates.push(match[1]);
+                        } else {
+                            skuCandidates.push(textSku.trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        identifiers.sku = skuCandidates.find(candidate => candidate && candidate.trim()) || '';
+
+        return identifiers;
+    }
+
     document.addEventListener('click', function(event) {
-        if (!event.target || typeof event.target.closest !== 'function') return;
+        if (!event.target || typeof event.target.closest !== 'function') {
+            return;
+        }
 
         const quickviewBtn = event.target.closest('.quickview');
-        if (!quickviewBtn) return;
+        if (!quickviewBtn) {
+            return;
+        }
 
-        const isB2B = window.b2bCustomerData || window.isB2BCustomer;
+        const epicorInstance = window.EpicorN8NPricing;
+        if (!epicorInstance) {
+            return;
+        }
 
         const intervalId = setInterval(() => {
             const modal = document.querySelector('#modal.open .productView, #modal.is-open .productView, .modal.open .productView, .modal.is-open .productView');
@@ -1973,103 +2057,94 @@
 
             clearInterval(intervalId);
 
-            const epicorInstance = window.EpicorN8NPricing;
+            if (modal.dataset.epicorQuickviewProcessing === 'true') {
+                return;
+            }
+
+            modal.dataset.epicorQuickviewProcessing = 'true';
+
             const modalPriceLoadingEls = modal.querySelectorAll('.price-loading');
             const modalPriceContentEls = modal.querySelectorAll('.price-content');
 
             modalPriceLoadingEls.forEach(el => (el.style.display = 'block'));
             modalPriceContentEls.forEach(el => (el.style.display = 'none'));
 
-            let actualProductId = epicorInstance?.getNumericProductId(modal) ||
-                epicorInstance?.getNumericProductId(quickviewBtn) || null;
+            const { productId, sku } = resolveQuickviewIdentifiers(modal, quickviewBtn, epicorInstance);
 
-            if (!actualProductId) {
-                const hiddenInput = modal.querySelector('input[name="product_id"]');
-                if (hiddenInput && hiddenInput.value && /^\d+$/.test(hiddenInput.value.trim())) {
-                    actualProductId = hiddenInput.value.trim();
-                }
-            }
-
-            if (!actualProductId) {
+            if (!productId) {
                 modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
                 modalPriceContentEls.forEach(el => (el.style.display = 'block'));
+                delete modal.dataset.epicorQuickviewProcessing;
                 return;
             }
 
-            const cacheKey = `quickview-${actualProductId}`;
-            if (quickviewRequestCache.has(cacheKey)) {
+            const mainPriceSection = modal.querySelector('.price-section--withoutTax.price--withoutTax');
+            const priceEl = mainPriceSection?.querySelector('.price') || null;
+
+            if (!mainPriceSection || !priceEl) {
                 modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                modalPriceContentEls.forEach(el => (el.style.display = 'block'));
+                delete modal.dataset.epicorQuickviewProcessing;
                 return;
             }
 
-            quickviewRequestCache.set(cacheKey, true);
+            mainPriceSection.style.display = 'block';
 
-            setTimeout(() => {
-                const mainPriceSection = modal.querySelector('.price-section--withoutTax.price--withoutTax');
-                if (!mainPriceSection) {
-                    modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
-                    quickviewRequestCache.delete(cacheKey);
-                    return;
+            if (!priceEl.getAttribute('data-original-price')) {
+                priceEl.setAttribute('data-original-price', priceEl.textContent.trim());
+            }
+
+            priceEl.setAttribute('data-epicor-loading', 'true');
+
+            const isB2BCustomer = Boolean(window.b2bCustomerData && epicorInstance.isB2BCustomer?.());
+
+            const finishQuickviewUpdate = () => {
+                priceEl.removeAttribute('data-epicor-loading');
+                modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
+                modalPriceContentEls.forEach(el => (el.style.display = 'block'));
+                delete modal.dataset.epicorQuickviewProcessing;
+            };
+
+            if (isB2BCustomer) {
+                const customerData = window.b2bCustomerData;
+                const productData = {
+                    product_id: productId,
+                    sku: sku || '',
+                    quantity: 1
+                };
+
+                const cacheKey = `${customerData.customer_id || 'anon'}-${customerData.customer_group_code || 'nogroup'}-${productId}-${sku || 'nosku'}`;
+
+                let pricingPromise = quickviewRequestCache.get(cacheKey);
+                if (!pricingPromise) {
+                    pricingPromise = epicorInstance.getPriceFromN8N(customerData, productData);
+                    quickviewRequestCache.set(cacheKey, pricingPromise);
                 }
 
-                mainPriceSection.style.display = 'block';
-                const priceEl = mainPriceSection.querySelector('.price');
-                if (!priceEl) {
-                    modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                    modalPriceContentEls.forEach(el => (el.style.display = 'block'));
-                    quickviewRequestCache.delete(cacheKey);
-                    return;
-                }
-
-                if (!priceEl.getAttribute('data-original-price')) {
-                    priceEl.setAttribute('data-original-price', priceEl.textContent.trim());
-                }
-
-                priceEl.setAttribute('data-epicor-loading', 'true');
-
-                const sku = epicorInstance?.getSkuFromElement(modal) ||
-                    quickviewBtn.dataset.productSku ||
-                    '';
-
-                if (isB2B && epicorInstance && window.b2bCustomerData) {
-                    const productData = { product_id: actualProductId.toString(), quantity: 1, sku };
-                    const customerData = window.b2bCustomerData;
-
-                    epicorInstance.getPriceFromN8N(customerData, productData)
-                        .then(pricing => {
-                            if (pricing && pricing.valid && pricing.netPrice) {
-                                const formattedPrice = epicorInstance.formatPrice(pricing.netPrice, pricing.currency);
-                                priceEl.textContent = formattedPrice;
-                            } else {
-                                const fallback = priceEl.getAttribute('data-original-price') || 'Price Unavailable';
-                                priceEl.textContent = fallback;
-                            }
-                        })
-                        .catch(() => {
-                            const fallback = priceEl.getAttribute('data-original-price') || 'Price Unavailable';
-                            priceEl.textContent = fallback;
-                        })
-                        .finally(() => {
-                            priceEl.removeAttribute('data-epicor-loading');
-                            modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                            modalPriceContentEls.forEach(el => (el.style.display = 'block'));
-                            setTimeout(() => quickviewRequestCache.delete(cacheKey), 500);
-                        });
-                } else {
-                    setTimeout(() => {
-                        const originalPrice = priceEl.getAttribute('data-original-price') || priceEl.textContent;
-                        priceEl.textContent = originalPrice;
-                        priceEl.removeAttribute('data-epicor-loading');
-                        modalPriceLoadingEls.forEach(el => (el.style.display = 'none'));
-                        modalPriceContentEls.forEach(el => (el.style.display = 'block'));
+                pricingPromise
+                    .then(pricing => {
+                        if (pricing && pricing.valid && pricing.netPrice) {
+                            priceEl.textContent = epicorInstance.formatPrice(pricing.netPrice, pricing.currency);
+                        } else {
+                            priceEl.textContent = priceEl.getAttribute('data-original-price') || 'Price Unavailable';
+                        }
+                    })
+                    .catch(() => {
+                        priceEl.textContent = priceEl.getAttribute('data-original-price') || 'Price Unavailable';
+                    })
+                    .finally(() => {
                         quickviewRequestCache.delete(cacheKey);
-                    }, 1000);
-                }
-            }, 100);
+                        finishQuickviewUpdate();
+                    });
+            } else {
+                setTimeout(() => {
+                    priceEl.textContent = priceEl.getAttribute('data-original-price') || priceEl.textContent;
+                    finishQuickviewUpdate();
+                }, 800);
+            }
 
             setTimeout(() => {
-                setupQuickviewAddToCartListener(modal, actualProductId);
+                setupQuickviewAddToCartListener(modal, productId);
             }, 1000);
         }, 200);
     });
