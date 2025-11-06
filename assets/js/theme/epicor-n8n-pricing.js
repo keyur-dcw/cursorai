@@ -18,8 +18,9 @@
         CACHE_TIMEOUT: 5 * 60 * 1000,
         BATCH_SIZE: 3,
         VIEW_EDIT_CART_MAX_WAIT: 20000,
-        VIEW_EDIT_CART_MIN_SPIN: 10000,
-        VIEW_EDIT_CART_POST_COMPLETION_DELAY: 2000,
+        VIEW_EDIT_CART_MIN_SPIN: 500,
+        VIEW_EDIT_CART_POST_COMPLETION_SPIN: 5000,
+        VIEW_EDIT_CART_POST_LOADER_DELAY: 2000,
         VIEW_EDIT_CART_LOADER_FALLBACK: 15000,
         N8N_STATUS_CHECK_INTERVAL: 100
     };
@@ -2334,40 +2335,41 @@
                     destination = '/cart.php';
                 }
 
-                if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.showLoaderBeforeUpdate === 'function') {
-                    window.EpicorN8NPricing.showLoaderBeforeUpdate();
-                }
+                  if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.showLoaderBeforeUpdate === 'function') {
+                      window.EpicorN8NPricing.showLoaderBeforeUpdate();
+                  }
 
-                const waitResult = await waitForN8NProcessingToFinish({
-                    timeoutMs: Math.max(CONFIG.VIEW_EDIT_CART_MAX_WAIT, CONFIG.VIEW_EDIT_CART_MIN_SPIN),
-                    minWaitMs: CONFIG.VIEW_EDIT_CART_MIN_SPIN,
-                    checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
-                });
+                  const waitResult = await waitForN8NProcessingToFinish({
+                      timeoutMs: Math.max(CONFIG.VIEW_EDIT_CART_MAX_WAIT, CONFIG.VIEW_EDIT_CART_MIN_SPIN),
+                      minWaitMs: CONFIG.VIEW_EDIT_CART_MIN_SPIN,
+                      checkIntervalMs: CONFIG.N8N_STATUS_CHECK_INTERVAL
+                  });
 
-                if (waitResult.completed) {
-                    await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_DELAY);
-                } else if (waitResult.timedOut) {
-                    markN8NProcessingComplete();
-                    markCartUpdateComplete();
-                }
+                  if (waitResult.completed) {
+                      await sleep(CONFIG.VIEW_EDIT_CART_POST_COMPLETION_SPIN);
+                  } else if (waitResult.timedOut) {
+                      markN8NProcessingComplete();
+                      markCartUpdateComplete();
+                  }
 
-                if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
-                    window.EpicorN8NPricing.hideLoaderAfterUpdate();
-                }
+                  if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
+                      window.EpicorN8NPricing.hideLoaderAfterUpdate();
+                  }
 
-                if (typeof stopBigCommerceLoader === 'function') {
-                    stopBigCommerceLoader();
-                }
+                  if (typeof stopBigCommerceLoader === 'function') {
+                      stopBigCommerceLoader();
+                  }
 
-                status.awaitingCartNavigation = false;
+                  await sleep(CONFIG.VIEW_EDIT_CART_POST_LOADER_DELAY);
 
-                if (wantsNewTab) {
-                    const targetAttr = trigger.getAttribute('target') || '_blank';
-                    window.open(destination, targetAttr);
-                } else {
-                    await sleep(100);
-                    window.location.assign(destination);
-                }
+                  status.awaitingCartNavigation = false;
+
+                  if (wantsNewTab) {
+                      const targetAttr = trigger.getAttribute('target') || '_blank';
+                      window.open(destination, targetAttr);
+                  } else {
+                      window.location.assign(destination);
+                  }
             })().catch(() => {
                 status.awaitingCartNavigation = false;
                 if (window.EpicorN8NPricing && typeof window.EpicorN8NPricing.hideLoaderAfterUpdate === 'function') {
