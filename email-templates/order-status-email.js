@@ -126,15 +126,17 @@ const makeProductKey = (product) => {
 	if (!product || typeof product !== 'object') {
 		return '';
 	}
-	const orderProductId =
-		product.order_product_id ||
-		product.orderProductId ||
-		product.id ||
-		product.order_item_id ||
-		'';
+
 	const productId =
-		product.product_id || product.productId || product.id || '';
+		product.product_id ||
+		product.productId ||
+		product.catalog_product_id ||
+		product.catalog_productId ||
+		product.id ||
+		'';
+
 	const sku = product.sku || product.sku_code || '';
+
 	const options =
 		product.product_options ||
 		product.attribute_lines ||
@@ -152,7 +154,7 @@ const makeProductKey = (product) => {
 			.join('|');
 	}
 
-	return [orderProductId, productId, sku, optionKey].join('::');
+	return [productId, sku, optionKey].join('::').toLowerCase();
 };
 
 const appendNormalizedProduct = (collection, product, overrideQty, keySet) => {
