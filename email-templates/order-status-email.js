@@ -122,11 +122,52 @@ const normalizeProduct = (product, overrideQty) => {
 	};
 };
 
-const appendNormalizedProduct = (collection, product, overrideQty) => {
+const makeProductKey = (product) => {
+	if (!product || typeof product !== 'object') {
+		return '';
+	}
+	const orderProductId =
+		product.order_product_id ||
+		product.orderProductId ||
+		product.id ||
+		product.order_item_id ||
+		'';
+	const productId =
+		product.product_id || product.productId || product.id || '';
+	const sku = product.sku || product.sku_code || '';
+	const options =
+		product.product_options ||
+		product.attribute_lines ||
+		product.options ||
+		[];
+
+	let optionKey = '';
+	if (Array.isArray(options) && options.length) {
+		optionKey = options
+			.map((option) => {
+				const key = option.display_name || option.name || '';
+				const value = option.display_value || option.value || '';
+				return `${key}:${value}`;
+			})
+			.join('|');
+	}
+
+	return [orderProductId, productId, sku, optionKey].join('::');
+};
+
+const appendNormalizedProduct = (collection, product, overrideQty, keySet) => {
 	if (!product) return;
+	const key = makeProductKey(product);
+	if (keySet && key && keySet.has(key)) {
+		return;
+	}
+
 	const normalized = normalizeProduct(product, overrideQty);
 	if (normalized.quantity > 0 || normalized.downloadUrl) {
 		collection.push(normalized);
+		if (keySet && key) {
+			keySet.add(key);
+		}
 	}
 };
 
@@ -197,21 +238,11 @@ let shipped = [];
 let unshipped = [];
 let downloadable = [];
 
-readyForPickupProducts.forEach((product) =>
-	appendNormalizedProduct(readyForPickup, product),
-);
-pickedUpProducts.forEach((product) =>
-	appendNormalizedProduct(pickedUp, product),
-);
-shippedProducts.forEach((product) =>
-	appendNormalizedProduct(shipped, product),
-);
-unshippedProducts.forEach((product) =>
-	appendNormalizedProduct(unshipped, product),
-);
-downloadableProducts.forEach((product) =>
-	appendNormalizedProduct(downloadable, product),
-);
+const readyKeys = new Set();
+const pickedKeys = new Set();
+const shippedKeys = new Set();
+const unshippedKeys = new Set();
+const downloadableKeys = new Set();
 
 orderProducts.forEach((product) => {
 	const shippedQty = Math.max(toNumber(product.quantity_shipped), 0);
@@ -226,18 +257,49 @@ orderProducts.forEach((product) => {
 	const isDigital = productType === 'digital' || !!product.download_url;
 
 	if (isDigital) {
-		appendNormalizedProduct(downloadable, product, orderedQty);
+		appendNormalizedProduct(
+			downloadable,
+			product,
+			orderedQty,
+			downloadableKeys,
+		);
 		return;
 	}
 
 	if (shippedQty > 0) {
-		appendNormalizedProduct(shipped, product, shippedQty);
+		appendNormalizedProduct(
+			shipped,
+			product,
+			shippedQty,
+			shippedKeys,
+		);
 	}
 
 	if (unshippedQty > 0) {
-		appendNormalizedProduct(unshipped, product, unshippedQty);
+		appendNormalizedProduct(
+			unshipped,
+			product,
+			unshippedQty,
+			unshippedKeys,
+		);
 	}
 });
+
+readyForPickupProducts.forEach((product) =>
+	appendNormalizedProduct(readyForPickup, product, undefined, readyKeys),
+);
+pickedUpProducts.forEach((product) =>
+	appendNormalizedProduct(pickedUp, product, undefined, pickedKeys),
+);
+shippedProducts.forEach((product) =>
+	appendNormalizedProduct(shipped, product, undefined, shippedKeys),
+);
+unshippedProducts.forEach((product) =>
+	appendNormalizedProduct(unshipped, product, undefined, unshippedKeys),
+);
+downloadableProducts.forEach((product) =>
+	appendNormalizedProduct(downloadable, product, undefined, downloadableKeys),
+);
 
 shipments.forEach((shipment) => {
 	(shipment.items || []).forEach((item) => {
@@ -250,6 +312,7 @@ shipments.forEach((shipment) => {
 				shipped,
 				catalogProduct,
 				catalogProduct.quantity,
+				shippedKeys,
 			);
 		}
 	});
