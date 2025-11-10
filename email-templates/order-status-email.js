@@ -261,30 +261,48 @@ shipped = mergeProductQuantities(shipped);
 unshipped = mergeProductQuantities(unshipped);
 downloadable = mergeProductQuantities(downloadable);
 
-const trackingEntries = shipments
-	.filter(
-		(shipment) =>
-			shipment.tracking_number ||
-			shipment.generated_tracking_link ||
-			shipment.tracking_link,
-	)
-	.map((shipment) => ({
-		id: escapeHtml(
-			shipment.tracking_number ||
+const trackingEntries = (() => {
+	const entries = shipments
+		.filter(
+			(shipment) =>
+				shipment.tracking_number ||
 				shipment.generated_tracking_link ||
-				shipment.tracking_link ||
-				'',
-		),
-		link: escapeHtml(
-			shipment.tracking_link || shipment.generated_tracking_link || '',
-		),
-		shippingMethod: escapeHtml(
-			shipment.shipping_method ||
-				shipment.shipping_provider_display_name ||
-				shipment.shipping_provider ||
-				'',
-		),
-	}));
+				shipment.tracking_link,
+		)
+		.map((shipment) => ({
+			id: escapeHtml(
+				shipment.tracking_number ||
+					shipment.generated_tracking_link ||
+					shipment.tracking_link ||
+					'',
+			),
+			link: escapeHtml(
+				shipment.tracking_link || shipment.generated_tracking_link || '',
+			),
+			shippingMethod: escapeHtml(
+				shipment.shipping_method ||
+					shipment.shipping_provider_display_name ||
+					shipment.shipping_provider ||
+					'',
+			),
+		}));
+
+	const deduped = [];
+	const seen = new Set();
+
+	entries.forEach((entry) => {
+		const key = `${entry.id}::${entry.link}::${entry.shippingMethod}`;
+		if (key.trim() === '::::') {
+			return;
+		}
+		if (!seen.has(key)) {
+			seen.add(key);
+			deduped.push(entry);
+		}
+	});
+
+	return deduped;
+})();
 
 const statusRaw =
 	(order.custom_status || order.status || order.status_text || '').trim();
@@ -381,12 +399,14 @@ const shopImage = escapeHtml(
 		: `${fallbackCdn}/img/emails/shop.png`,
 );
 
-const preheaderText = `Order #${order.id}${
-	epicorId ? ` (Epicor ID ${epicorId})` : ''
-} is now ${statusDisplay}.`;
+const orderReferenceText = epicorId
+	? `#${order.id} (Epicor ID ${epicorId})`
+	: `#${order.id}`;
+
+const preheaderText = `Order ${orderReferenceText} is now ${statusDisplay}.`;
 
 const emailTitle = 'Order status updated';
-const messageLine = `We’ve updated order #${orderIdentifier} to ${statusDisplay}.`;
+const messageLine = `We’ve updated order ${orderReferenceText} to ${statusDisplay}.`;
 
 const renderProductSection = (title, products) => {
 	if (!products || !products.length) return '';
@@ -565,7 +585,7 @@ const logoInner = storeLogoUrl
 	? `<img src="${storeLogoUrl}" alt="${storeLogoTitle}">`
 	: `<span>${storeLogoTitle}</span>`;
 const logoHtml = storeLink
-	? `<a href="${storeLink}" target="_blank">${logoInner}</a>`
+	? `<a href="${storeLink}" target="_blank" rel="noopener noreferrer">${logoInner}</a>`
 	: logoInner;
 
 const statusButton = orderLink
@@ -1191,10 +1211,9 @@ ${statusButton}
 </body>
 </html>`;
 
-const subjectIdValue = epicorId ? `${epicorId}` : order.id;
 const subject = storeName
-	? `Your ${storeName} Order Has Been Updated #${subjectIdValue}`
-	: `Order #${subjectIdValue}`;
+	? `${storeName} order ${orderReferenceText} is now ${statusDisplay}`
+	: `Order ${orderReferenceText} is now ${statusDisplay}`;
 
 const recipientEmail =
 	payload.recipientEmail ||
