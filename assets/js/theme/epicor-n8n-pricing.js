@@ -10,6 +10,7 @@
     const CONFIG = {
         N8N_WEBHOOK_URL: 'https://cannon.n8n.asgard.dcw.dev/webhook/epicor-pricing',
         N8N_CART_WEBHOOK_URL: 'https://cannon.n8n.asgard.dcw.dev/webhook/update-cart-price',
+        OVERSIZED_GRAPHQL_TOKEN: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJjaWQiOlsxXSwiY29ycyI6WyJodHRwczovL3N0b3JlLWVvbXFpYzViOGYubXliaWdjb21tZXJjZS5jb20iLCJodHRwczovL3R3cy1iYWl0LWFuZC10YWNrbGUubXliaWdjb21tZXJjZS5jb20iXSwiZWF0IjoxODg1NjM1MTc2LCJpYXQiOjE3NDc3NDExNTQsImlzcyI6IkJDIiwic2lkIjoxMDAzMzIxMTUxLCJzdWIiOiJjZ3c1Mzdmc201MjA2N2pwenp2ZXpwZWowd29nazc1Iiwic3ViX3R5cGUiOjIsInRva2VuX3R5cGUiOjF9.OtundvjkmepdzBCmyiodnADq0DbX93rdASt6rfaf5enwN6rHilJyKiIZ3Z-csQtqKu0qWqa-dpiwQXnPh4ZeyA',
         B2B_AUTH_TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdG9yZV9oYXNoIjoiN2VlYmRsd2Z1NCIsImRiIjoiZGVmYXVsdCIsImVtYWlsIjoia2V5dXJAZG90Y29td2VhdmVycy5jb20iLCJuYW1lIjoiVjNBcGlUb2tlbiIsImV2ZW50X2NoYW5uZWwiOiJhcHAiLCJ0b2tlbl92ZXJzaW9uIjoidjMifQ.CNaHMWbRsf49Zk4XNDNaEwTQF-gdSVaOmIGb3wR-BkQ',
         B2B_CUSTOMER_API: 'https://api-b2b.bigcommerce.com/api/v3/io/users/customer/',
         B2B_COMPANY_API: 'https://api-b2b.bigcommerce.com/api/v3/io/companies/',
